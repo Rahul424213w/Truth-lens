@@ -208,20 +208,35 @@ Provide a comprehensive analysis focusing on:
         
         # Parse JSON response
         try:
+            # First try direct JSON parsing
             analysis_result = json.loads(response)
         except json.JSONDecodeError:
-            # Fallback parsing if JSON is malformed
-            analysis_result = {
-                "credibility_score": 0.5,
-                "risk_level": "medium",
-                "summary": "Analysis completed but response parsing failed",
-                "red_flags": ["Response format error"],
-                "positive_indicators": [],
-                "manipulation_techniques": [],
-                "source_analysis": "Unable to parse detailed analysis",
-                "fact_check_suggestions": ["Manual verification recommended"],
-                "educational_explanation": response[:500] + "..." if len(response) > 500 else response
-            }
+            try:
+                # Try to extract JSON from markdown code blocks
+                import re
+                json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
+                if json_match:
+                    analysis_result = json.loads(json_match.group(1))
+                else:
+                    # Try to find JSON without code blocks
+                    json_match = re.search(r'(\{.*?\})', response, re.DOTALL)
+                    if json_match:
+                        analysis_result = json.loads(json_match.group(1))
+                    else:
+                        raise json.JSONDecodeError("No JSON found", response, 0)
+            except (json.JSONDecodeError, AttributeError):
+                # Fallback parsing if JSON is malformed
+                analysis_result = {
+                    "credibility_score": 0.5,
+                    "risk_level": "medium",
+                    "summary": "Analysis completed but response parsing failed",
+                    "red_flags": ["Response format error"],
+                    "positive_indicators": [],
+                    "manipulation_techniques": [],
+                    "source_analysis": "Unable to parse detailed analysis",
+                    "fact_check_suggestions": ["Manual verification recommended"],
+                    "educational_explanation": response[:500] + "..." if len(response) > 500 else response
+                }
         
         return analysis_result
         
