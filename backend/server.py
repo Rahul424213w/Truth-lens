@@ -1,75 +1,530 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-import os
-import logging
-from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional, Dict, Any
+import os
+from dotenv import load_dotenv
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+import bcrypt
+import jwt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import requests
+from urllib.parse import urlparse
+import tempfile
+import aiofiles
+import asyncio
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+import json
 
+# Load environment variables
+load_dotenv()
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+app = FastAPI(title="TruthLens - AI Misinformation Detection API")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
-
-# Create the main app without a prefix
-app = FastAPI()
-
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
-
-
-# Define Models
-class StatusCheck(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-class StatusCheckCreate(BaseModel):
-    client_name: str
-
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
-
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
-
-# Include the router in the main app
-app.include_router(api_router)
-
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Database configuration
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "truthlens_db")
+EMERGENT_LLM_KEY = os.getenv("EMERGENT_LLM_KEY", "sk-emergent-eDa3e91B7B982180bF")
+JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Initialize MongoDB client
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[DB_NAME]
+
+# Security
+security = HTTPBearer()
+
+# Pydantic Models
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    username: str
+    email: str
+    password_hash: str
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class Analysis(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    content_type: str  # "text", "url", "image"
+    content: str
+    analysis_result: Dict[str, Any]
+    credibility_score: float
+    risk_level: str  # "low", "medium", "high", "critical"
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class TextAnalysisRequest(BaseModel):
+    content: str
+
+class URLAnalysisRequest(BaseModel):
+    url: str
+
+class AnalysisResponse(BaseModel):
+    analysis_id: str
+    content_type: str
+    credibility_score: float
+    risk_level: str
+    summary: str
+    detailed_analysis: Dict[str, Any]
+    educational_tips: List[str]
+
+# Helper Functions
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, hashed: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def create_jwt_token(user_id: str) -> str:
+    payload = {"user_id": user_id}
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+def verify_jwt_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload["user_id"]
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user_id = verify_jwt_token(credentials.credentials)
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return User(**user)
+
+async def extract_url_content(url: str) -> str:
+    """Extract text content from URL"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Simple text extraction (in production, use BeautifulSoup)
+        content = response.text
+        # Remove HTML tags (basic approach)
+        import re
+        clean_content = re.sub(r'<[^>]+>', '', content)
+        clean_content = re.sub(r'\s+', ' ', clean_content).strip()
+        
+        # Limit content length
+        return clean_content[:5000] if len(clean_content) > 5000 else clean_content
+    except Exception as e:
+        return f"Error extracting content: {str(e)}"
+
+async def analyze_with_gemini(content: str, content_type: str, url: str = None) -> Dict[str, Any]:
+    """Analyze content using Gemini 2.0 Flash"""
+    try:
+        # Create a unique session ID for this analysis
+        session_id = str(uuid.uuid4())
+        
+        # Initialize Gemini chat
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session_id,
+            system_message="""You are TruthLens, an expert AI system specialized in detecting misinformation and educating users about media literacy. 
+
+Your role is to:
+1. Analyze content for potential misinformation, bias, and credibility issues
+2. Provide educational explanations about manipulation techniques
+3. Assess source credibility and reliability
+4. Give actionable tips for users to verify information
+
+Always respond in JSON format with these exact keys:
+{
+    "credibility_score": (float between 0.0-1.0, where 1.0 is most credible),
+    "risk_level": ("low", "medium", "high", or "critical"),
+    "summary": "Brief 2-3 sentence summary of your assessment",
+    "red_flags": ["list", "of", "concerning", "elements"],
+    "positive_indicators": ["list", "of", "credible", "elements"],
+    "manipulation_techniques": ["list", "of", "techniques", "detected"],
+    "source_analysis": "Analysis of the source credibility (if URL provided)",
+    "fact_check_suggestions": ["specific", "things", "to", "verify"],
+    "educational_explanation": "Detailed explanation of why this content might be misleading and how to identify such content in future"
+}
+
+Be thorough but concise. Focus on education and empowerment."""
+        ).with_model("gemini", "gemini-2.0-flash")
+        
+        # Prepare the analysis prompt
+        if content_type == "url":
+            prompt = f"""Please analyze this URL and its content for misinformation and credibility:
+
+URL: {url}
+Content extracted from URL:
+{content}
+
+Provide a comprehensive analysis focusing on:
+1. Source credibility and reputation
+2. Content accuracy and potential bias
+3. Signs of manipulation or misinformation
+4. Educational guidance for users"""
+        elif content_type == "text":
+            prompt = f"""Please analyze this text content for misinformation and credibility:
+
+Content:
+{content}
+
+Provide a comprehensive analysis focusing on:
+1. Factual accuracy and verifiability
+2. Emotional manipulation techniques
+3. Logical fallacies or bias
+4. Educational guidance for users"""
+        else:  # image
+            prompt = f"""Please analyze this image content for misinformation and credibility:
+
+Image description/text: {content}
+
+Provide a comprehensive analysis focusing on:
+1. Visual manipulation signs
+2. Context and source verification
+3. Common image misinformation techniques
+4. Educational guidance for users"""
+        
+        # Send message to Gemini
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse JSON response
+        try:
+            analysis_result = json.loads(response)
+        except json.JSONDecodeError:
+            # Fallback parsing if JSON is malformed
+            analysis_result = {
+                "credibility_score": 0.5,
+                "risk_level": "medium",
+                "summary": "Analysis completed but response parsing failed",
+                "red_flags": ["Response format error"],
+                "positive_indicators": [],
+                "manipulation_techniques": [],
+                "source_analysis": "Unable to parse detailed analysis",
+                "fact_check_suggestions": ["Manual verification recommended"],
+                "educational_explanation": response[:500] + "..." if len(response) > 500 else response
+            }
+        
+        return analysis_result
+        
+    except Exception as e:
+        # Fallback analysis in case of API failure
+        return {
+            "credibility_score": 0.3,
+            "risk_level": "high",
+            "summary": f"Analysis failed due to technical error: {str(e)}",
+            "red_flags": ["Technical analysis failure", "Unable to verify content"],
+            "positive_indicators": [],
+            "manipulation_techniques": [],
+            "source_analysis": "Could not analyze source",
+            "fact_check_suggestions": ["Manual fact-checking strongly recommended"],
+            "educational_explanation": "Due to technical limitations, this content could not be properly analyzed. Please verify this information through multiple reliable sources."
+        }
+
+# API Endpoints
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "service": "TruthLens API"}
+
+# Authentication Endpoints
+@app.post("/api/auth/register")
+async def register(user_data: UserCreate):
+    # Check if user exists
+    existing_user = await db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    # Create user
+    password_hash = hash_password(user_data.password)
+    user = User(
+        username=user_data.username,
+        email=user_data.email,
+        password_hash=password_hash
+    )
+    
+    await db.users.insert_one(user.dict())
+    token = create_jwt_token(user.id)
+    
+    return {
+        "message": "User registered successfully",
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }
+
+@app.post("/api/auth/login")
+async def login(login_data: UserLogin):
+    user = await db.users.find_one({"email": login_data.email})
+    if not user or not verify_password(login_data.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_jwt_token(user["id"])
+    return {
+        "message": "Login successful",
+        "token": token,
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"]
+        }
+    }
+
+# Analysis Endpoints
+@app.post("/api/analyze/text", response_model=AnalysisResponse)
+async def analyze_text(request: TextAnalysisRequest, current_user: User = Depends(get_current_user)):
+    """Analyze text content for misinformation"""
+    
+    # Perform AI analysis
+    analysis_result = await analyze_with_gemini(request.content, "text")
+    
+    # Create analysis record
+    analysis = Analysis(
+        user_id=current_user.id,
+        content_type="text",
+        content=request.content,
+        analysis_result=analysis_result,
+        credibility_score=analysis_result["credibility_score"],
+        risk_level=analysis_result["risk_level"]
+    )
+    
+    await db.analyses.insert_one(analysis.dict())
+    
+    # Extract educational tips
+    educational_tips = []
+    educational_tips.extend(analysis_result.get("fact_check_suggestions", []))
+    if analysis_result.get("educational_explanation"):
+        educational_tips.append(analysis_result["educational_explanation"])
+    
+    return AnalysisResponse(
+        analysis_id=analysis.id,
+        content_type="text",
+        credibility_score=analysis_result["credibility_score"],
+        risk_level=analysis_result["risk_level"],
+        summary=analysis_result["summary"],
+        detailed_analysis=analysis_result,
+        educational_tips=educational_tips
+    )
+
+@app.post("/api/analyze/url", response_model=AnalysisResponse)
+async def analyze_url(request: URLAnalysisRequest, current_user: User = Depends(get_current_user)):
+    """Analyze URL content for misinformation"""
+    
+    # Extract content from URL
+    content = await extract_url_content(request.url)
+    
+    # Perform AI analysis
+    analysis_result = await analyze_with_gemini(content, "url", request.url)
+    
+    # Create analysis record
+    analysis = Analysis(
+        user_id=current_user.id,
+        content_type="url",
+        content=request.url,
+        analysis_result=analysis_result,
+        credibility_score=analysis_result["credibility_score"],
+        risk_level=analysis_result["risk_level"]
+    )
+    
+    await db.analyses.insert_one(analysis.dict())
+    
+    # Extract educational tips
+    educational_tips = []
+    educational_tips.extend(analysis_result.get("fact_check_suggestions", []))
+    if analysis_result.get("educational_explanation"):
+        educational_tips.append(analysis_result["educational_explanation"])
+    
+    return AnalysisResponse(
+        analysis_id=analysis.id,
+        content_type="url",
+        credibility_score=analysis_result["credibility_score"],
+        risk_level=analysis_result["risk_level"],
+        summary=analysis_result["summary"],
+        detailed_analysis=analysis_result,
+        educational_tips=educational_tips
+    )
+
+@app.post("/api/analyze/image", response_model=AnalysisResponse)
+async def analyze_image(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    """Analyze image content for misinformation"""
+    
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Save uploaded file temporarily
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.filename.split('.')[-1]}") as temp_file:
+        content = await file.read()
+        temp_file.write(content)
+        temp_file_path = temp_file.name
+    
+    try:
+        # Create Gemini chat for image analysis
+        session_id = str(uuid.uuid4())
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=session_id,
+            system_message="""You are TruthLens, an expert AI system specialized in detecting misinformation in images and educating users about visual media literacy.
+
+Analyze images for:
+1. Signs of digital manipulation or deepfakes
+2. Misleading context or misattribution
+3. Propaganda techniques
+4. Visual bias or selective framing
+
+Always respond in JSON format with the same structure as text analysis."""
+        ).with_model("gemini", "gemini-2.0-flash")
+        
+        # Create file attachment
+        image_file = FileContentWithMimeType(
+            file_path=temp_file_path,
+            mime_type=file.content_type
+        )
+        
+        # Analyze with Gemini
+        prompt = """Please analyze this image for potential misinformation, manipulation, or misleading content. Provide comprehensive analysis focusing on:
+1. Visual authenticity and signs of manipulation
+2. Context verification and potential misuse
+3. Propaganda or bias techniques
+4. Educational guidance for image verification"""
+        
+        user_message = UserMessage(
+            text=prompt,
+            file_contents=[image_file]
+        )
+        
+        response = await chat.send_message(user_message)
+        
+        # Parse response
+        try:
+            analysis_result = json.loads(response)
+        except json.JSONDecodeError:
+            analysis_result = {
+                "credibility_score": 0.5,
+                "risk_level": "medium",
+                "summary": "Image analysis completed",
+                "red_flags": ["Response parsing issue"],
+                "positive_indicators": [],
+                "manipulation_techniques": [],
+                "source_analysis": "Image analysis performed",
+                "fact_check_suggestions": ["Reverse image search recommended"],
+                "educational_explanation": response[:500] + "..." if len(response) > 500 else response
+            }
+        
+    except Exception as e:
+        analysis_result = {
+            "credibility_score": 0.3,
+            "risk_level": "high",
+            "summary": f"Image analysis failed: {str(e)}",
+            "red_flags": ["Analysis failure", "Unable to verify image"],
+            "positive_indicators": [],
+            "manipulation_techniques": [],
+            "source_analysis": "Could not analyze image",
+            "fact_check_suggestions": ["Manual verification recommended", "Use reverse image search"],
+            "educational_explanation": "Due to technical limitations, this image could not be properly analyzed. Use reverse image search and check multiple sources."
+        }
+    finally:
+        # Clean up temporary file
+        os.unlink(temp_file_path)
+    
+    # Create analysis record
+    analysis = Analysis(
+        user_id=current_user.id,
+        content_type="image",
+        content=f"Image: {file.filename}",
+        analysis_result=analysis_result,
+        credibility_score=analysis_result["credibility_score"],
+        risk_level=analysis_result["risk_level"]
+    )
+    
+    await db.analyses.insert_one(analysis.dict())
+    
+    # Extract educational tips
+    educational_tips = []
+    educational_tips.extend(analysis_result.get("fact_check_suggestions", []))
+    if analysis_result.get("educational_explanation"):
+        educational_tips.append(analysis_result["educational_explanation"])
+    
+    return AnalysisResponse(
+        analysis_id=analysis.id,
+        content_type="image",
+        credibility_score=analysis_result["credibility_score"],
+        risk_level=analysis_result["risk_level"],
+        summary=analysis_result["summary"],
+        detailed_analysis=analysis_result,
+        educational_tips=educational_tips
+    )
+
+# User History Endpoints
+@app.get("/api/user/analyses")
+async def get_user_analyses(limit: int = 20, current_user: User = Depends(get_current_user)):
+    """Get user's analysis history"""
+    analyses = await db.analyses.find(
+        {"user_id": current_user.id}
+    ).sort("created_at", -1).limit(limit).to_list(length=None)
+    
+    return {
+        "analyses": [
+            {
+                "id": analysis["id"],
+                "content_type": analysis["content_type"],
+                "content": analysis["content"][:100] + "..." if len(analysis["content"]) > 100 else analysis["content"],
+                "credibility_score": analysis["credibility_score"],
+                "risk_level": analysis["risk_level"],
+                "created_at": analysis["created_at"]
+            }
+            for analysis in analyses
+        ]
+    }
+
+@app.get("/api/analysis/{analysis_id}")
+async def get_analysis_details(analysis_id: str, current_user: User = Depends(get_current_user)):
+    """Get detailed analysis results"""
+    analysis = await db.analyses.find_one({"id": analysis_id, "user_id": current_user.id})
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    
+    return analysis
+
+# Educational Content Endpoint
+@app.get("/api/education/tips")
+async def get_media_literacy_tips():
+    """Get general media literacy tips"""
+    tips = [
+        "Check the source: Look for author credentials and publication reputation",
+        "Examine the URL: Be wary of sites that mimic legitimate news sources",
+        "Look for corroboration: See if other reputable sources report the same information",
+        "Check the date: Old news can be misleading when shared out of context",
+        "Analyze the language: Emotional or sensational language may indicate bias",
+        "Verify images: Use reverse image search to check if images are used correctly",
+        "Check for bias: Consider the source's potential political or commercial motivations",
+        "Look for citations: Credible content usually references primary sources",
+        "Be skeptical of shocking claims: Extraordinary claims require extraordinary evidence",
+        "Consider your own biases: We're all more likely to believe information that confirms our existing beliefs"
+    ]
+    
+    return {"tips": tips}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
