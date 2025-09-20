@@ -1,45 +1,66 @@
-name: Deploy TruthLens
+name: Deploy TruthLens to GitHub Pages
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-    
-    - name: Install dependencies
+        
+    - name: Install frontend dependencies
       run: |
-        cd backend
-        pip install -r requirements.txt
-    
-    - name: Run tests
+        cd frontend
+        npm ci
+        
+    - name: Build frontend
       run: |
-        cd backend
-        python -m pytest tests/ -v
+        cd frontend
+        npm run build
+      env:
+        REACT_APP_BACKEND_URL: https://truthlens-api.vercel.app
+        
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+      
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: './frontend/build'
 
   deploy:
-    needs: test
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
+    needs: build
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Deploy to Heroku
-      uses: akhileshns/heroku-deploy@v3.12.12
-      with:
-        heroku_api_key: ${{secrets.HEROKU_API_KEY}}
-        heroku_app_name: "truthlens-app"
-        heroku_email: "truthlens@example.com"
-        appdir: "backend"
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

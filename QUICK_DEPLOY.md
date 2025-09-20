@@ -1,6 +1,6 @@
-# 🚀 TruthLens - Zero Setup Deployment
+# 🚀 TruthLens - GitHub Pages Deployment
 
-Your TruthLens project is now **100% ready for deployment** with no manual configuration required!
+Your TruthLens project is now **100% ready for GitHub Pages deployment** with no manual configuration required!
 
 ## ✅ What's Already Configured
 
@@ -8,40 +8,55 @@ Your TruthLens project is now **100% ready for deployment** with no manual confi
 - **MongoDB Database**: Cloud database already set up and connected
 - **JWT Secret**: Security keys configured
 - **Environment Variables**: All production settings ready
-- **Deployment Scripts**: GitHub Actions and Docker configs ready
+- **GitHub Actions**: Automated deployment to GitHub Pages
+- **Vercel Backend**: Serverless API ready for deployment
 
 ## 🎯 One-Click Deployment Options
 
-### Option 1: Deploy to Heroku (Recommended)
+### Option 1: GitHub Pages (Recommended)
 
-1. **Click this button** to deploy instantly:
-   [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/your-username/truthlens)
-
-2. **Or manually**:
+1. **Push to GitHub**:
    ```bash
-   # Clone your repo
-   git clone https://github.com/your-username/truthlens.git
-   cd truthlens
-   
-   # Deploy to Heroku
-   heroku create your-app-name
-   git push heroku main
+   git add .
+   git commit -m "Initial commit"
+   git push origin main
    ```
 
-### Option 2: Deploy with Docker
+2. **Enable GitHub Pages**:
+   - Go to your repo Settings → Pages
+   - Source: GitHub Actions
+   - The workflow will automatically deploy your app!
+
+3. **Deploy Backend to Vercel**:
+   - Go to [vercel.com](https://vercel.com)
+   - Import your GitHub repo
+   - Vercel will auto-detect the API configuration
+   - Deploy with one click!
+
+### Option 2: Manual GitHub Pages Deploy
 
 ```bash
-# Clone and run
+# Clone your repo
+git clone https://github.com/your-username/truthlens.git
+cd truthlens
+
+# Install dependencies and build
+cd frontend
+npm install
+npm run build
+
+# Deploy to GitHub Pages
+npm run deploy
+```
+
+### Option 3: Deploy with Docker (Local)
+
+```bash
+# Clone and run locally
 git clone https://github.com/your-username/truthlens.git
 cd truthlens
 docker-compose up -d
 ```
-
-### Option 3: Deploy to Railway
-
-1. Connect your GitHub repo to Railway
-2. Railway will auto-detect the configuration
-3. Deploy with one click!
 
 ## 🔧 Pre-Configured Settings
 
@@ -59,9 +74,9 @@ docker-compose up -d
 ## 🌐 Access Your App
 
 After deployment:
-- **Frontend**: `https://your-app-name.herokuapp.com` (or your domain)
-- **Backend API**: `https://your-app-name.herokuapp.com/api`
-- **Health Check**: `https://your-app-name.herokuapp.com/api/health`
+- **Frontend**: `https://your-username.github.io/truthlens`
+- **Backend API**: `https://your-vercel-app.vercel.app/api`
+- **Health Check**: `https://your-vercel-app.vercel.app/api/health`
 
 ## 📱 Features Ready to Use
 
