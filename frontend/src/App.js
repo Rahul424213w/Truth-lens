@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import './App.css';
+import api from './services/api';
 
 // Context for authentication
 const AuthContext = createContext();
@@ -29,20 +30,7 @@ const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Login failed');
-      }
-
-      const data = await response.json();
+      const data = await api.login(email, password);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
@@ -54,20 +42,7 @@ const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, email, password }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Registration failed');
-      }
-
-      const data = await response.json();
+      const data = await api.register(username, email, password);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       setUser(data.user);
@@ -347,21 +322,15 @@ const TextAnalyzer = ({ onResult, onBack }) => {
     
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/analyze/text`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content }),
+      const result = await api.analyzeText(content);
+      await api.saveAnalysis({
+        id: Date.now().toString(),
+        content_type: 'text',
+        content: content.substring(0, 100) + '...',
+        credibility_score: result.credibility_score,
+        risk_level: result.risk_level,
+        created_at: new Date().toISOString()
       });
-
-      if (!response.ok) {
-        throw new Error('Analysis failed');
-      }
-
-      const result = await response.json();
       onResult(result);
     } catch (error) {
       alert('Analysis failed. Please try again.');
@@ -415,21 +384,15 @@ const URLAnalyzer = ({ onResult, onBack }) => {
     
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/analyze/url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ url }),
+      const result = await api.analyzeURL(url);
+      await api.saveAnalysis({
+        id: Date.now().toString(),
+        content_type: 'url',
+        content: url,
+        credibility_score: result.credibility_score,
+        risk_level: result.risk_level,
+        created_at: new Date().toISOString()
       });
-
-      if (!response.ok) {
-        throw new Error('Analysis failed');
-      }
-
-      const result = await response.json();
       onResult(result);
     } catch (error) {
       alert('Analysis failed. Please try again.');
@@ -505,23 +468,15 @@ const ImageAnalyzer = ({ onResult, onBack }) => {
     
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/analyze/image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
+      const result = await api.analyzeImage(file);
+      await api.saveAnalysis({
+        id: Date.now().toString(),
+        content_type: 'image',
+        content: `Image: ${file.name}`,
+        credibility_score: result.credibility_score,
+        risk_level: result.risk_level,
+        created_at: new Date().toISOString()
       });
-
-      if (!response.ok) {
-        throw new Error('Analysis failed');
-      }
-
-      const result = await response.json();
       onResult(result);
     } catch (error) {
       alert('Analysis failed. Please try again.');

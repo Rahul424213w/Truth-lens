@@ -44,7 +44,7 @@ jobs:
         cd frontend
         npm run build
       env:
-        REACT_APP_BACKEND_URL: https://truthlens-api.vercel.app
+        PUBLIC_URL: /truthlens
         
     - name: Setup Pages
       uses: actions/configure-pages@v4

@@ -1,24 +1,24 @@
-# 🚀 TruthLens - GitHub Pages Deployment
+# 🚀 TruthLens - Single GitHub Pages Deployment
 
-Your TruthLens project is now **100% ready for GitHub Pages deployment** with no manual configuration required!
+Your TruthLens project is now **100% ready for single GitHub Pages deployment** with both frontend and backend integrated!
 
 ## ✅ What's Already Configured
 
 - **Google AI API Key**: Pre-configured and ready to use
-- **MongoDB Database**: Cloud database already set up and connected
-- **JWT Secret**: Security keys configured
-- **Environment Variables**: All production settings ready
+- **Client-Side API**: All backend functionality integrated into frontend
+- **Static API Endpoints**: JSON files for health checks and educational content
+- **Local Storage**: User data and analysis history stored locally
 - **GitHub Actions**: Automated deployment to GitHub Pages
-- **Vercel Backend**: Serverless API ready for deployment
+- **No External Dependencies**: Everything runs from GitHub Pages
 
-## 🎯 One-Click Deployment Options
+## 🎯 One-Click Deployment
 
-### Option 1: GitHub Pages (Recommended)
+### Single GitHub Pages Deployment
 
 1. **Push to GitHub**:
    ```bash
    git add .
-   git commit -m "Initial commit"
+   git commit -m "Initial TruthLens deployment"
    git push origin main
    ```
 
@@ -27,11 +27,7 @@ Your TruthLens project is now **100% ready for GitHub Pages deployment** with no
    - Source: GitHub Actions
    - The workflow will automatically deploy your app!
 
-3. **Deploy Backend to Vercel**:
-   - Go to [vercel.com](https://vercel.com)
-   - Import your GitHub repo
-   - Vercel will auto-detect the API configuration
-   - Deploy with one click!
+**That's it!** Your app will be live at `https://your-username.github.io/truthlens`
 
 ### Option 2: Manual GitHub Pages Deploy
 
@@ -74,9 +70,9 @@ docker-compose up -d
 ## 🌐 Access Your App
 
 After deployment:
-- **Frontend**: `https://your-username.github.io/truthlens`
-- **Backend API**: `https://your-vercel-app.vercel.app/api`
-- **Health Check**: `https://your-vercel-app.vercel.app/api/health`
+- **Full App**: `https://your-username.github.io/truthlens`
+- **Health Check**: `https://your-username.github.io/truthlens/api/health.json`
+- **Educational Tips**: `https://your-username.github.io/truthlens/api/education/tips.json`
 
 ## 📱 Features Ready to Use
 
