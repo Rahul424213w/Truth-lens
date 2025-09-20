@@ -1,23 +1,32 @@
-# Getting Started with Create React App
+# TruthLens Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This is the frontend application for TruthLens, an AI-powered misinformation detection system. Built with React and Tailwind CSS.
+
+## Features
+
+- **Modern UI**: Clean, responsive design with Tailwind CSS
+- **Authentication**: Secure login and registration system
+- **Analysis Tools**: Text, URL, and image analysis interfaces
+- **Educational Content**: Media literacy tips and guidance
+- **Real-time Results**: Interactive analysis results display
+
+## Technology Stack
+
+- **React 19**: Modern React with hooks and context
+- **Tailwind CSS**: Utility-first CSS framework
+- **Axios**: HTTP client for API communication
+- **React Router**: Client-side routing
+- **Radix UI**: Accessible component primitives
 
 ## Available Scripts
 
-In the project directory, you can run:
-
 ### `npm start`
 
-Runs the app in the development mode.\
+Runs the app in development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
 The page will reload when you make changes.\
 You may also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
 
 ### `npm run build`
 
@@ -27,44 +36,90 @@ It correctly bundles React in production mode and optimizes the build for the be
 The build is minified and the filenames include the hashes.\
 Your app is ready to be deployed!
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### `npm test`
 
-### `npm run eject`
+Launches the test runner in the interactive watch mode.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Environment Variables
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Create a `.env` file in the frontend directory:
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```
+REACT_APP_BACKEND_URL=http://localhost:8001
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## Project Structure
 
-## Learn More
+```
+src/
+├── components/          # Reusable UI components
+│   └── ui/             # Radix UI components
+├── hooks/              # Custom React hooks
+├── lib/                # Utility functions
+├── App.js              # Main application component
+├── App.css             # Global styles
+├── index.js            # Application entry point
+└── index.css           # Base styles
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Key Components
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+- **AuthProvider**: Authentication context and state management
+- **Dashboard**: Main application interface
+- **TextAnalyzer**: Text content analysis interface
+- **URLAnalyzer**: URL credibility checking interface
+- **ImageAnalyzer**: Image analysis interface
+- **ResultCard**: Analysis results display
 
-### Code Splitting
+## Styling
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+The application uses Tailwind CSS for styling with a custom design system:
 
-### Analyzing the Bundle Size
+- **Colors**: Blue primary theme with semantic color coding
+- **Typography**: Clean, readable font hierarchy
+- **Layout**: Responsive grid system
+- **Components**: Consistent spacing and interaction patterns
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## API Integration
 
-### Making a Progressive Web App
+The frontend communicates with the backend API through:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+- **Authentication**: JWT token-based authentication
+- **Analysis**: RESTful API calls for content analysis
+- **User Data**: User profile and history management
+- **Error Handling**: Comprehensive error handling and user feedback
 
-### Advanced Configuration
+## Deployment
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+### Build for Production
 
-### Deployment
+```bash
+npm run build
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+### Deploy to Vercel
 
-### `npm run build` fails to minify
+1. Install Vercel CLI: `npm i -g vercel`
+2. Run: `vercel`
+3. Follow the prompts
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### Deploy to Netlify
+
+1. Build the project: `npm run build`
+2. Upload the `build` folder to Netlify
+3. Set environment variables in Netlify dashboard
+
+## Contributing
+
+1. Follow the existing code style
+2. Use meaningful component and variable names
+3. Add comments for complex logic
+4. Test your changes thoroughly
+5. Update documentation as needed
+
+## Browser Support
+
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)

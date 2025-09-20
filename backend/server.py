@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 import tempfile
 import aiofiles
 import asyncio
-from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+import google.generativeai as genai
 import json
 
 # Load environment variables
@@ -33,10 +33,10 @@ app.add_middleware(
 )
 
 # Database configuration
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb+srv://truthlens:truthlens123@cluster0.mongodb.net/truthlens_db?retryWrites=true&w=majority")
 DB_NAME = os.getenv("DB_NAME", "truthlens_db")
-EMERGENT_LLM_KEY = os.getenv("EMERGENT_LLM_KEY", "sk-emergent-eDa3e91B7B982180bF")
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "AIzaSyBvOkBwqLcFdEfGhIjKlMnOpQrStUvWxYz")
+JWT_SECRET = os.getenv("JWT_SECRET", "truthlens-super-secret-jwt-key-2024")
 
 # Initialize MongoDB client
 client = AsyncIOMotorClient(MONGO_URL)
@@ -134,16 +134,16 @@ async def extract_url_content(url: str) -> str:
         return f"Error extracting content: {str(e)}"
 
 async def analyze_with_gemini(content: str, content_type: str, url: str = None) -> Dict[str, Any]:
-    """Analyze content using Gemini 2.0 Flash"""
+    """Analyze content using Google's Gemini API"""
     try:
-        # Create a unique session ID for this analysis
-        session_id = str(uuid.uuid4())
+        # Configure the Gemini API
+        genai.configure(api_key=GOOGLE_API_KEY)
         
-        # Initialize Gemini chat
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=session_id,
-            system_message="""You are TruthLens, an expert AI system specialized in detecting misinformation and educating users about media literacy. 
+        # Initialize the model
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Prepare the system prompt
+        system_prompt = """You are TruthLens, an expert AI system specialized in detecting misinformation and educating users about media literacy. 
 
 Your role is to:
 1. Analyze content for potential misinformation, bias, and credibility issues
@@ -165,11 +165,12 @@ Always respond in JSON format with these exact keys:
 }
 
 Be thorough but concise. Focus on education and empowerment."""
-        ).with_model("gemini", "gemini-2.0-flash")
         
         # Prepare the analysis prompt
         if content_type == "url":
-            prompt = f"""Please analyze this URL and its content for misinformation and credibility:
+            prompt = f"""{system_prompt}
+
+Please analyze this URL and its content for misinformation and credibility:
 
 URL: {url}
 Content extracted from URL:
@@ -181,7 +182,9 @@ Provide a comprehensive analysis focusing on:
 3. Signs of manipulation or misinformation
 4. Educational guidance for users"""
         elif content_type == "text":
-            prompt = f"""Please analyze this text content for misinformation and credibility:
+            prompt = f"""{system_prompt}
+
+Please analyze this text content for misinformation and credibility:
 
 Content:
 {content}
@@ -192,7 +195,9 @@ Provide a comprehensive analysis focusing on:
 3. Logical fallacies or bias
 4. Educational guidance for users"""
         else:  # image
-            prompt = f"""Please analyze this image content for misinformation and credibility:
+            prompt = f"""{system_prompt}
+
+Please analyze this image content for misinformation and credibility:
 
 Image description/text: {content}
 
@@ -202,28 +207,28 @@ Provide a comprehensive analysis focusing on:
 3. Common image misinformation techniques
 4. Educational guidance for users"""
         
-        # Send message to Gemini
-        user_message = UserMessage(text=prompt)
-        response = await chat.send_message(user_message)
+        # Generate content using Gemini
+        response = model.generate_content(prompt)
+        response_text = response.text
         
         # Parse JSON response
         try:
             # First try direct JSON parsing
-            analysis_result = json.loads(response)
+            analysis_result = json.loads(response_text)
         except json.JSONDecodeError:
             try:
                 # Try to extract JSON from markdown code blocks
                 import re
-                json_match = re.search(r'```json\s*(\{.*?\})\s*```', response, re.DOTALL)
+                json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
                 if json_match:
                     analysis_result = json.loads(json_match.group(1))
                 else:
                     # Try to find JSON without code blocks
-                    json_match = re.search(r'(\{.*?\})', response, re.DOTALL)
+                    json_match = re.search(r'(\{.*?\})', response_text, re.DOTALL)
                     if json_match:
                         analysis_result = json.loads(json_match.group(1))
                     else:
-                        raise json.JSONDecodeError("No JSON found", response, 0)
+                        raise json.JSONDecodeError("No JSON found", response_text, 0)
             except (json.JSONDecodeError, AttributeError):
                 # Fallback parsing if JSON is malformed
                 analysis_result = {
@@ -235,7 +240,7 @@ Provide a comprehensive analysis focusing on:
                     "manipulation_techniques": [],
                     "source_analysis": "Unable to parse detailed analysis",
                     "fact_check_suggestions": ["Manual verification recommended"],
-                    "educational_explanation": response[:500] + "..." if len(response) > 500 else response
+                    "educational_explanation": response_text[:500] + "..." if len(response_text) > 500 else response_text
                 }
         
         return analysis_result
@@ -394,12 +399,17 @@ async def analyze_image(file: UploadFile = File(...), current_user: User = Depen
         temp_file_path = temp_file.name
     
     try:
-        # Create Gemini chat for image analysis
-        session_id = str(uuid.uuid4())
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=session_id,
-            system_message="""You are TruthLens, an expert AI system specialized in detecting misinformation in images and educating users about visual media literacy.
+        # Configure the Gemini API
+        genai.configure(api_key=GOOGLE_API_KEY)
+        
+        # Initialize the model
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # Load the image
+        image = genai.upload_file(temp_file_path)
+        
+        # Analyze with Gemini
+        prompt = """You are TruthLens, an expert AI system specialized in detecting misinformation in images and educating users about visual media literacy.
 
 Analyze images for:
 1. Signs of digital manipulation or deepfakes
@@ -407,44 +417,57 @@ Analyze images for:
 3. Propaganda techniques
 4. Visual bias or selective framing
 
-Always respond in JSON format with the same structure as text analysis."""
-        ).with_model("gemini", "gemini-2.0-flash")
-        
-        # Create file attachment
-        image_file = FileContentWithMimeType(
-            file_path=temp_file_path,
-            mime_type=file.content_type
-        )
-        
-        # Analyze with Gemini
-        prompt = """Please analyze this image for potential misinformation, manipulation, or misleading content. Provide comprehensive analysis focusing on:
+Always respond in JSON format with these exact keys:
+{
+    "credibility_score": (float between 0.0-1.0, where 1.0 is most credible),
+    "risk_level": ("low", "medium", "high", or "critical"),
+    "summary": "Brief 2-3 sentence summary of your assessment",
+    "red_flags": ["list", "of", "concerning", "elements"],
+    "positive_indicators": ["list", "of", "credible", "elements"],
+    "manipulation_techniques": ["list", "of", "techniques", "detected"],
+    "source_analysis": "Analysis of the image source and context",
+    "fact_check_suggestions": ["specific", "things", "to", "verify"],
+    "educational_explanation": "Detailed explanation of why this image might be misleading and how to identify such content in future"
+}
+
+Please analyze this image for potential misinformation, manipulation, or misleading content. Provide comprehensive analysis focusing on:
 1. Visual authenticity and signs of manipulation
 2. Context verification and potential misuse
 3. Propaganda or bias techniques
 4. Educational guidance for image verification"""
         
-        user_message = UserMessage(
-            text=prompt,
-            file_contents=[image_file]
-        )
-        
-        response = await chat.send_message(user_message)
+        response = model.generate_content([prompt, image])
+        response_text = response.text
         
         # Parse response
         try:
-            analysis_result = json.loads(response)
+            analysis_result = json.loads(response_text)
         except json.JSONDecodeError:
-            analysis_result = {
-                "credibility_score": 0.5,
-                "risk_level": "medium",
-                "summary": "Image analysis completed",
-                "red_flags": ["Response parsing issue"],
-                "positive_indicators": [],
-                "manipulation_techniques": [],
-                "source_analysis": "Image analysis performed",
-                "fact_check_suggestions": ["Reverse image search recommended"],
-                "educational_explanation": response[:500] + "..." if len(response) > 500 else response
-            }
+            try:
+                # Try to extract JSON from markdown code blocks
+                import re
+                json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+                if json_match:
+                    analysis_result = json.loads(json_match.group(1))
+                else:
+                    # Try to find JSON without code blocks
+                    json_match = re.search(r'(\{.*?\})', response_text, re.DOTALL)
+                    if json_match:
+                        analysis_result = json.loads(json_match.group(1))
+                    else:
+                        raise json.JSONDecodeError("No JSON found", response_text, 0)
+            except (json.JSONDecodeError, AttributeError):
+                analysis_result = {
+                    "credibility_score": 0.5,
+                    "risk_level": "medium",
+                    "summary": "Image analysis completed",
+                    "red_flags": ["Response parsing issue"],
+                    "positive_indicators": [],
+                    "manipulation_techniques": [],
+                    "source_analysis": "Image analysis performed",
+                    "fact_check_suggestions": ["Reverse image search recommended"],
+                    "educational_explanation": response_text[:500] + "..." if len(response_text) > 500 else response_text
+                }
         
     except Exception as e:
         analysis_result = {

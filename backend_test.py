@@ -13,7 +13,7 @@ import io
 import time
 
 # Configuration
-BACKEND_URL = "https://truthlens-10.preview.emergentagent.com/api"
+BACKEND_URL = "http://localhost:8001/api"
 TEST_USER_EMAIL = "sarah.johnson@example.com"
 TEST_USER_PASSWORD = "SecurePass123!"
 TEST_USERNAME = "sarah_johnson"
