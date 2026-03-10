@@ -284,7 +284,7 @@ app.get('/api/stats', optionalAuth, async(req,res)=>{
   res.json({success:true,data:{totalAnalyses:total,byType,byCategory,averageCredibilityScore:avgScore}});
 });
 
-app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'../frontend/index.html')));
+app.get('(.*)',(req,res)=>res.sendFile(path.join(__dirname,'../frontend/index.html')));
 app.use((err,req,res,next)=>res.status(500).json({success:false,error:err.message}));
 
 function genericFallback(){return{credibilityScore:50,category:'unclear',verdict:'AI temporarily unavailable.',analysis:'Please try again.',redFlags:['Automated analysis failed'],positiveSignals:[],languageAnalysis:{tone:'unknown',emotionalWords:[],sensationalism:'unknown',readabilityLevel:'unknown'},specificClaims:[],claimVerdict:[],verificationSteps:['Snopes.com','FactCheck.org','Reuters.com'],similarFakePatterns:[],trustworthinessBadges:[],suggestions:['Try again'],contextualBackground:''};}
