@@ -3,7 +3,7 @@ services:
     name: truthlens-backend
     env: node
     rootDir: backend
-    buildCommand: rm -f db.json && rm -rf node_modules package-lock.json && npm install && node -e "require('express')" && echo "✅ express OK"
+    buildCommand: rm -rf node_modules package-lock.json && npm install && npm rebuild mime-db
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
