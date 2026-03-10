@@ -3,7 +3,7 @@ services:
     name: truthlens-backend
     env: node
     rootDir: backend
-    buildCommand: rm -rf node_modules package-lock.json && npm install
+    buildCommand: rm -f db.json && rm -rf node_modules package-lock.json && npm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
