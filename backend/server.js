@@ -175,8 +175,10 @@ JSON only:
   data.suggestions=Array.isArray(data.suggestions)?data.suggestions:[];
   data=correctScore(data,text);
   const userId=req.user?.id||null;
-  await db.collection('analyses').insertOne({userId,type:'text',inputPreview:text.substring(0,200),...data,createdAt:new Date()});
-  if(userId)await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  if(userId){
+    await db.collection('analyses').insertOne({userId,type:'text',inputPreview:text.substring(0,200),...data,createdAt:new Date()});
+    await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  }
   res.json({success:true,data});
 });
 
@@ -186,8 +188,10 @@ app.post('/api/analyze/image', optionalAuth, async(req,res)=>{
   if(!image)return res.status(400).json({success:false,error:'Image data required'});
   const data={credibilityScore:50,category:'unclear',verdict:'Use manual tools below for image verification.',analysis:'The current AI provider does not support image analysis. Use the tools listed below for best results.',manipulationSigns:['Use manual tools below'],authenticitySignals:[],technicalAnalysis:{compressionArtifacts:'unknown',lightingConsistency:'unknown',shadowAnalysis:'unknown',edgeAnalysis:'unknown',noisePattern:'unknown'},aiGenerationIndicators:[],contextClues:[],textInImage:'unknown',verificationSteps:['TinEye.com — reverse image search','Google Images — drag & drop','FotoForensics.com — ELA analysis','aiornot.com — AI image detector','hivemoderation.com — content moderation'],forensicBadges:[],suggestions:['Start with TinEye reverse image search','Use FotoForensics for manipulation detection','Try aiornot.com for AI generation']};
   const userId=req.user?.id||null;
-  await db.collection('analyses').insertOne({userId,type:'image',inputPreview:'[image upload]',...data,createdAt:new Date()});
-  if(userId)await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  if(userId){
+    await db.collection('analyses').insertOne({userId,type:'image',inputPreview:'[image upload]',...data,createdAt:new Date()});
+    await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  }
   res.json({success:true,data});
 });
 
@@ -204,8 +208,10 @@ JSON only:{"credibilityScore":<0-100>,"category":"<real|fake|misleading|clickbai
   data.credibilityScore=Math.min(100,Math.max(0,parseInt(data.credibilityScore)||50));
   data=correctScore(data,content);
   const userId=req.user?.id||null;
-  await db.collection('analyses').insertOne({userId,type:'article',inputPreview:url,...data,createdAt:new Date()});
-  if(userId)await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  if(userId){
+    await db.collection('analyses').insertOne({userId,type:'article',inputPreview:url,...data,createdAt:new Date()});
+    await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  }
   res.json({success:true,data});
 });
 
@@ -220,8 +226,10 @@ app.post('/api/analyze/compare', optionalAuth, async(req,res)=>{
   if(!data)data={consistencyScore:50,verdict:'Could not compare.',analysis:'Manual comparison recommended.',agreements:[],disagreements:[],mostReliableSource:'Unknown',leastReliableSource:'Unknown',biasComparison:[],factualConsistency:{consistentFacts:[],conflictingFacts:[],uniqueClaims:[]},narrativeDifferences:[],recommendations:['Check Reuters'],truthLikelihood:'Manual verification required'};
   data.consistencyScore=Math.min(100,Math.max(0,parseInt(data.consistencyScore)||50));
   const userId=req.user?.id||null;
-  await db.collection('analyses').insertOne({userId,type:'compare',inputPreview:sources[0].substring(0,200),...data,createdAt:new Date()});
-  if(userId)await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  if(userId){
+    await db.collection('analyses').insertOne({userId,type:'compare',inputPreview:sources[0].substring(0,200),...data,createdAt:new Date()});
+    await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  }
   res.json({success:true,data});
 });
 
@@ -240,16 +248,20 @@ JSON only:{"verdict":"<TRUE|FALSE|MOSTLY TRUE|MOSTLY FALSE|MIXED|UNVERIFIABLE|OU
   if(data.verdict==='FALSE'&&data.confidence<70)data.confidence=85;
   if(data.verdict==='TRUE'&&data.confidence<70)data.confidence=80;
   const userId=req.user?.id||null;
-  await db.collection('factChecks').insertOne({userId,claim,...data,createdAt:new Date()});
-  if(userId)await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  if(userId){
+    await db.collection('factChecks').insertOne({userId,claim,...data,createdAt:new Date()});
+    await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  }
   res.json({success:true,data});
 });
 
 // HISTORY
 app.get('/api/history', optionalAuth, async(req,res)=>{
+  // Guests have no userId — return empty, never leak other users' data
+  if(!req.user) return res.json({success:true,data:[],guest:true});
   const limit=parseInt(req.query.limit)||50;
   const type=req.query.type;
-  const filter=req.user?{userId:req.user.id}:{};
+  const filter={userId:req.user.id};
   if(type)filter.type=type;
   const data=await db.collection('analyses').find(filter).sort({createdAt:-1}).limit(limit).toArray();
   res.json({success:true,data});
@@ -261,7 +273,9 @@ app.delete('/api/history/:id', authMiddleware, async(req,res)=>{
 });
 
 app.get('/api/stats', optionalAuth, async(req,res)=>{
-  const filter=req.user?{userId:req.user.id}:{};
+  // Guests get zero stats — never expose other users' data
+  if(!req.user) return res.json({success:true,data:{totalAnalyses:0,byType:[],byCategory:[],averageCredibilityScore:0},guest:true});
+  const filter={userId:req.user.id};
   const analyses=await db.collection('analyses').find(filter).toArray();
   const total=analyses.length;
   const byType=Object.entries(analyses.reduce((a,x)=>{a[x.type]=(a[x.type]||0)+1;return a;},{})).map(([type,count])=>({type,count}));
