@@ -157,11 +157,7 @@ app.delete('/api/cache',authMiddleware,(req,res)=>{responseCache.clear();res.jso
 app.post('/api/analyze/text', optionalAuth, async(req,res)=>{
   const{text}=req.body;
   if(!text||text.length<10)return res.status(400).json({success:false,error:'Text must be at least 10 characters'});
-  const prompt=`You are an expert fact-checker. Analyze this text.
-SCORE RULES: 0-10=completely false/hoax/fake death, 11-25=mostly false, 26-40=misleading, 41-55=unclear, 56-70=mostly true, 71-85=credible, 86-100=highly credible. NEVER output 50. Death claims about living public figures=score 0-5. Conspiracies=0-10.
-TEXT: """${text.substring(0,3000)}"""
-JSON only:
-{"credibilityScore":<0-100>,"category":"<real|fake|misleading|clickbait|satire|unclear>","verdict":"<one sentence>","analysis":"<3-4 sentences>","redFlags":["<flag>"],"positiveSignals":["<signal>"],"languageAnalysis":{"tone":"<neutral|emotional|alarmist|balanced|sensational|matter-of-fact>","emotionalWords":["<word>"],"sensationalism":"<low|medium|high>","readabilityLevel":"<basic|intermediate|advanced>"},"specificClaims":["<claim>"],"claimVerdict":["<verdict>"],"verificationSteps":["<step>"],"similarFakePatterns":["<pattern>"],"trustworthinessBadges":["<badge>"],"suggestions":["<advice>"],"contextualBackground":"<context>"}`;
+  const prompt=`You are an expert fact-checker. Analyze this text.\nSCORE RULES: 0-10=completely false/hoax/fake death, 11-25=mostly false, 26-40=misleading, 41-55=unclear, 56-70=mostly true, 71-85=credible, 86-100=highly credible. NEVER output 50. Death claims about living public figures=score 0-5. Conspiracies=0-10.\nTEXT: """${text.substring(0,3000)}"""\nJSON only:\n{"credibilityScore":<0-100>,"category":"<real|fake|misleading|clickbait|satire|unclear>","verdict":"<one sentence>","analysis":"<3-4 sentences>","redFlags":["<flag>"],"positiveSignals":["<signal>"],"languageAnalysis":{"tone":"<neutral|emotional|alarmist|balanced|sensational|matter-of-fact>","emotionalWords":["<word>"],"sensationalism":"<low|medium|high>","readabilityLevel":"<basic|intermediate|advanced>"},"specificClaims":["<claim>"],"claimVerdict":["<verdict>"],"verificationSteps":["<step>"],"similarFakePatterns":["<pattern>"],"trustworthinessBadges":["<badge>"],"suggestions":["<advice>"],"contextualBackground":"<context>"}`;
 
   const result=await callGroq(prompt);
   if(!result.success)return res.json({success:true,data:genericFallback(),warning:'AI temporarily unavailable.'});
@@ -200,8 +196,7 @@ app.post('/api/analyze/article', optionalAuth, async(req,res)=>{
   const{url,content}=req.body;
   if(!url||!content)return res.status(400).json({success:false,error:'URL and content required'});
   const domain=(()=>{try{return new URL(url).hostname.replace('www.','');}catch{return url;}})();
-  const prompt=`You are a senior journalist. Analyze this article. Domain:${domain} Content:"""${content.substring(0,3000)}""" Score:0-20=fake,21-40=misleading,41-55=unclear,56-75=mostly credible,76-100=highly credible. Never default to 50.
-JSON only:{"credibilityScore":<0-100>,"category":"<real|fake|misleading|clickbait|satire|unclear>","verdict":"<one sentence>","analysis":"<5-6 sentences>","sourceAssessment":{"domain":"${domain}","domainType":"<mainstream-news|independent-news|tabloid|satire|blog|government|academic|unknown>","knownBias":"<left|center-left|center|center-right|right|unknown>","reliabilityRating":"<high|medium|low|unknown>","notes":"<notes>"},"redFlags":["<flag>"],"positiveSignals":["<signal>"],"journalisticStandards":{"hasAuthor":false,"hasDate":false,"hasSources":false,"hasQuotes":false,"editorialStandards":"<professional|mixed|poor>"},"specificClaims":["<claim>"],"claimAccuracy":["<assessment>"],"biasIndicators":["<indicator>"],"verificationSteps":["<step>"],"suggestions":["<advice>"],"relatedCredibleSources":["<source>"]}`;
+  const prompt=`You are a senior journalist. Analyze this article. Domain:${domain} Content:"""${content.substring(0,3000)}""" Score:0-20=fake,21-40=misleading,41-55=unclear,56-75=mostly credible,76-100=highly credible. Never default to 50.\nJSON only:{"credibilityScore":<0-100>,"category":"<real|fake|misleading|clickbait|satire|unclear>","verdict":"<one sentence>","analysis":"<5-6 sentences>","sourceAssessment":{"domain":"${domain}","domainType":"<mainstream-news|independent-news|tabloid|satire|blog|government|academic|unknown>","knownBias":"<left|center-left|center|center-right|right|unknown>","reliabilityRating":"<high|medium|low|unknown>","notes":"<notes>"},"redFlags":["<flag>"],"positiveSignals":["<signal>"],"journalisticStandards":{"hasAuthor":false,"hasDate":false,"hasSources":false,"hasQuotes":false,"editorialStandards":"<professional|mixed|poor>"},"specificClaims":["<claim>"],"claimAccuracy":["<assessment>"],"biasIndicators":["<indicator>"],"verificationSteps":["<step>"],"suggestions":["<advice>"],"relatedCredibleSources":["<source>"]}`;
   const result=await callGroq(prompt);
   let data=result.success?parseJSON(result.text):null;
   if(!data)data={credibilityScore:50,category:'unclear',verdict:'Could not analyze.',analysis:'Manual review recommended.',sourceAssessment:{domain,domainType:'unknown',knownBias:'unknown',reliabilityRating:'unknown',notes:''},redFlags:['Analysis failed'],positiveSignals:[],journalisticStandards:{hasAuthor:false,hasDate:false,hasSources:false,hasQuotes:false,editorialStandards:'unknown'},specificClaims:[],claimAccuracy:[],biasIndicators:[],verificationSteps:['MediaBiasFactCheck.com'],suggestions:['Verify with Reuters'],relatedCredibleSources:['Reuters','AP News','BBC']};
@@ -237,8 +232,7 @@ app.post('/api/analyze/compare', optionalAuth, async(req,res)=>{
 app.post('/api/factcheck', optionalAuth, async(req,res)=>{
   const{claim}=req.body;
   if(!claim)return res.status(400).json({success:false,error:'Claim required'});
-  const prompt=`Professional fact-checker. Evaluate: "${claim}". Rules: Living person death claim+no knowledge=FALSE confidence 95+. Conspiracy=FALSE confidence 90+. Never say UNVERIFIABLE for things you know. Be direct.
-JSON only:{"verdict":"<TRUE|FALSE|MOSTLY TRUE|MOSTLY FALSE|MIXED|UNVERIFIABLE|OUTDATED>","confidence":<0-100>,"shortVerdict":"<punchy one-liner>","explanation":"<3-4 sentences with specific facts>","keyFacts":["<fact>"],"context":"<background>","specificSources":["<source>"],"relatedMisconceptions":["<myth>"],"originOfClaim":"<origin>","expertConsensus":"<consensus>"}`;
+  const prompt=`Professional fact-checker. Evaluate: "${claim}". Rules: Living person death claim+no knowledge=FALSE confidence 95+. Conspiracy=FALSE confidence 90+. Never say UNVERIFIABLE for things you know. Be direct.\nJSON only:{"verdict":"<TRUE|FALSE|MOSTLY TRUE|MOSTLY FALSE|MIXED|UNVERIFIABLE|OUTDATED>","confidence":<0-100>,"shortVerdict":"<punchy one-liner>","explanation":"<3-4 sentences with specific facts>","keyFacts":["<fact>"],"context":"<background>","specificSources":["<source>"],"relatedMisconceptions":["<myth>"],"originOfClaim":"<origin>","expertConsensus":"<consensus>"}`;
   const result=await callGroq(prompt);
   if(!result.success)return res.json({success:true,warning:'AI unavailable.',data:{verdict:'UNVERIFIABLE',confidence:0,shortVerdict:'AI unavailable.',explanation:'Verify manually.',keyFacts:[],context:'',specificSources:['Snopes.com','FactCheck.org','PolitiFact.com'],relatedMisconceptions:[],originOfClaim:'',expertConsensus:''}});
   let data=parseJSON(result.text);
@@ -257,7 +251,6 @@ JSON only:{"verdict":"<TRUE|FALSE|MOSTLY TRUE|MOSTLY FALSE|MIXED|UNVERIFIABLE|OU
 
 // HISTORY
 app.get('/api/history', optionalAuth, async(req,res)=>{
-  // Guests have no userId — return empty, never leak other users' data
   if(!req.user) return res.json({success:true,data:[],guest:true});
   const limit=parseInt(req.query.limit)||50;
   const type=req.query.type;
@@ -273,7 +266,6 @@ app.delete('/api/history/:id', authMiddleware, async(req,res)=>{
 });
 
 app.get('/api/stats', optionalAuth, async(req,res)=>{
-  // Guests get zero stats — never expose other users' data
   if(!req.user) return res.json({success:true,data:{totalAnalyses:0,byType:[],byCategory:[],averageCredibilityScore:0},guest:true});
   const filter={userId:req.user.id};
   const analyses=await db.collection('analyses').find(filter).toArray();
@@ -284,14 +276,20 @@ app.get('/api/stats', optionalAuth, async(req,res)=>{
   res.json({success:true,data:{totalAnalyses:total,byType,byCategory,averageCredibilityScore:avgScore}});
 });
 
-app.get('/{*path}',(req,res)=>res.sendFile(path.join(__dirname,'../frontend/index.html')));
+// Catch-all — serve frontend (Express 4 style)
+app.use((req,res)=>{
+  if(!req.path.startsWith('/api')){
+    res.sendFile(path.join(__dirname,'../frontend/index.html'));
+  }
+});
+
 app.use((err,req,res,next)=>res.status(500).json({success:false,error:err.message}));
 
 function genericFallback(){return{credibilityScore:50,category:'unclear',verdict:'AI temporarily unavailable.',analysis:'Please try again.',redFlags:['Automated analysis failed'],positiveSignals:[],languageAnalysis:{tone:'unknown',emotionalWords:[],sensationalism:'unknown',readabilityLevel:'unknown'},specificClaims:[],claimVerdict:[],verificationSteps:['Snopes.com','FactCheck.org','Reuters.com'],similarFakePatterns:[],trustworthinessBadges:[],suggestions:['Try again'],contextualBackground:''};}
 
 connectDB().then(()=>{
   app.listen(PORT,'0.0.0.0',()=>{
-    console.log(`\n✅  TruthLens v4 running!`);
+    console.log(`\n✅  TruthLens running on port ${PORT}`);
     console.log(`🌐  http://localhost:${PORT}`);
     console.log(`🤖  Groq models active`);
     console.log(`🍃  MongoDB connected\n`);
