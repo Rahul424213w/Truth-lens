@@ -1,835 +1,168 @@
-/* ═══════════════════════════════════════════════
-   TruthLens — script.js
-═══════════════════════════════════════════════ */
+/* TruthLens v4 — script.js */
+const API = window.location.hostname==='localhost'||window.location.hostname==='127.0.0.1'?'http://localhost:5000/api':'/api';
+let currentUser=null,authToken=localStorage.getItem('tl_token')||null,isGuestMode=false;
 
-const API = 'http://localhost:5000/api';
-
-// ── Page navigation ────────────────────────────────────────────────────────
-
-function enterApp() {
-  document.getElementById('landing-page').classList.remove('active');
-  document.getElementById('app-page').classList.add('active');
-  checkBackendStatus();
-  loadHistory();
-  loadStats();
-}
-
-function exitApp() {
-  document.getElementById('app-page').classList.remove('active');
-  document.getElementById('landing-page').classList.add('active');
-}
-
-function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-}
-
-// ── Tab switching ──────────────────────────────────────────────────────────
-
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.sb-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`tab-${name}`).classList.add('active');
-  if (btn) btn.classList.add('active');
-  closeResults();
-
-  if (name === 'history') loadHistory();
-  if (name === 'stats') loadStats();
-
-  if (window.innerWidth < 700) document.getElementById('sidebar').classList.remove('open');
-}
-
-// ── Backend status ─────────────────────────────────────────────────────────
-
-async function checkBackendStatus() {
-  const dot = document.getElementById('status-dot');
-  const text = document.getElementById('status-text');
-  try {
-    const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(4000) });
-    if (r.ok) {
-      dot.className = 'status-dot online';
-      text.textContent = 'Backend online';
-      loadLandingStat();
-    } else throw new Error();
-  } catch {
-    dot.className = 'status-dot offline';
-    text.textContent = 'Backend offline';
-    toast('Backend not running — run: cd backend && npm start', 'error', 6000);
-  }
-}
-
-async function loadLandingStat() {
-  try {
-    const r = await fetch(`${API}/stats`);
-    const d = await r.json();
-    const el = document.getElementById('stat-total');
-    if (el && d.data) el.textContent = d.data.totalAnalyses || 0;
-  } catch {}
-}
-
-// ── Toast notifications ────────────────────────────────────────────────────
-
-function toast(msg, type = 'info', duration = 3500) {
-  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
-  const t = document.createElement('div');
-  t.className = `toast ${type}`;
-  t.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
-  document.getElementById('toasts').appendChild(t);
-  setTimeout(() => t.remove(), duration);
-}
-
-// ── Loading helpers ────────────────────────────────────────────────────────
-
-const BTN_LABELS = {
-  'text-btn': 'Analyze Now →',
-  'image-btn': 'Analyze Image →',
-  'article-btn': 'Analyze Article →',
-  'compare-btn': 'Compare Sources →',
-  'factcheck-btn': 'Check →'
-};
-
-function setLoading(btnId, loading) {
-  const btn = document.getElementById(btnId);
-  if (!btn) return;
-  btn.disabled = loading;
-  btn.querySelector('.btn-inner').innerHTML = loading
-    ? '<span class="spinner"></span> Analyzing...'
-    : BTN_LABELS[btnId] || 'Analyze →';
-}
-
-// ── Init ──────────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-  // Char counter
-  const ti = document.getElementById('text-input');
-  if (ti) ti.addEventListener('input', () => {
-    document.getElementById('text-char-count').textContent = `${ti.value.length} characters`;
-  });
-
-  // Image input
-  const ii = document.getElementById('image-input');
-  if (ii) ii.addEventListener('change', handleImageSelect);
-
-  // Drag & drop
-  const zone = document.getElementById('upload-zone');
-  if (zone) {
-    zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor = 'rgba(79,255,176,0.6)'; });
-    zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
-    zone.addEventListener('drop', e => {
-      e.preventDefault(); zone.style.borderColor = '';
-      const file = e.dataTransfer.files[0];
-      if (file?.type.startsWith('image/')) {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        document.getElementById('image-input').files = dt.files;
-        handleImageSelect({ target: { files: [file] } });
-      }
-    });
-  }
-
-  // Keyboard shortcuts
-  const fi = document.getElementById('factcheck-input');
-  if (fi) fi.addEventListener('keypress', e => { if (e.key === 'Enter') quickFactCheck(); });
-  if (ti) ti.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') analyzeText(); });
-
-  loadLandingStat();
+document.addEventListener('DOMContentLoaded',async()=>{
+  const ti=document.getElementById('text-input');
+  if(ti){ti.addEventListener('input',()=>{document.getElementById('text-char-count').textContent=`${ti.value.length} characters`;});ti.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')analyzeText();});}
+  const ii=document.getElementById('image-input');if(ii)ii.addEventListener('change',handleImageSelect);
+  const zone=document.getElementById('upload-zone');
+  if(zone){zone.addEventListener('dragover',e=>{e.preventDefault();zone.style.borderColor='rgba(79,255,176,0.6)';});zone.addEventListener('dragleave',()=>{zone.style.borderColor='';});zone.addEventListener('drop',e=>{e.preventDefault();zone.style.borderColor='';const f=e.dataTransfer.files[0];if(f?.type.startsWith('image/')){const dt=new DataTransfer();dt.items.add(f);document.getElementById('image-input').files=dt.files;handleImageSelect({target:{files:[f]}});}});}
+  const fi=document.getElementById('factcheck-input');if(fi)fi.addEventListener('keypress',e=>{if(e.key==='Enter')quickFactCheck();});
+  document.getElementById('login-password')?.addEventListener('keypress',e=>{if(e.key==='Enter')handleLogin();});
+  document.getElementById('register-password')?.addEventListener('keypress',e=>{if(e.key==='Enter')handleRegister();});
+  if(authToken){const ok=await verifyToken();if(ok){showLanding();return;}}
+  showPage('auth-page');
 });
 
-// ── Text Analysis ──────────────────────────────────────────────────────────
+async function verifyToken(){try{const r=await fetch(`${API}/auth/me`,{headers:{Authorization:`Bearer ${authToken}`}});const d=await r.json();if(d.success){currentUser=d.user;updateUserUI();return true;}}catch{}authToken=null;localStorage.removeItem('tl_token');return false;}
 
-async function analyzeText() {
-  const text = document.getElementById('text-input').value.trim();
-  if (!text || text.length < 10) return toast('Please enter at least 10 characters', 'error');
-
-  setLoading('text-btn', true);
-  try {
-    const r = await fetch(`${API}/analyze/text`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    });
-    const d = await r.json();
-    if (d.success) displayResults(d.data, 'text');
-    else showError(d.error || "Analysis failed");
-  } catch {
-    toast('Could not connect to backend. Make sure it is running.', 'error');
-  } finally {
-    setLoading('text-btn', false);
+function updateUserUI(){
+  if(currentUser&&!isGuestMode){
+    const el=document.getElementById('sb-user-info');if(el)el.style.display='flex';
+    const av=document.getElementById('sb-avatar');if(av)av.textContent=(currentUser.name||'U')[0].toUpperCase();
+    const nm=document.getElementById('sb-user-name');if(nm)nm.textContent=currentUser.name||'User';
+    const em=document.getElementById('sb-user-email');if(em)em.textContent=currentUser.email||'';
+    const lb=document.getElementById('sb-logout-btn');if(lb)lb.style.display='block';
+    const tu=document.getElementById('topbar-user');if(tu)tu.textContent=`Hi, ${currentUser.name?.split(' ')[0]||'User'}`;
+    const nua=document.getElementById('nav-user-area');if(nua)nua.innerHTML=`<span style="font-size:0.85rem;color:var(--text2)">${currentUser.name}</span><button class="nav-cta" onclick="enterApp()">Dashboard →</button>`;
   }
 }
 
-// ── Image Analysis ─────────────────────────────────────────────────────────
+function handleLogout(){authToken=null;currentUser=null;isGuestMode=false;localStorage.removeItem('tl_token');showPage('auth-page');showLogin();toast('Signed out','info');}
 
-function handleImageSelect(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) {
-    toast('Image too large — max 5MB', 'error');
-    e.target.value = '';
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = ev => {
-    document.getElementById('upload-placeholder').style.display = 'none';
-    const wrap = document.getElementById('image-preview-wrap');
-    wrap.style.display = 'flex';
-    document.getElementById('image-preview-img').src = ev.target.result;
-    document.getElementById('img-name').textContent = file.name;
-  };
-  reader.readAsDataURL(file);
+function showLogin(){document.getElementById('login-form').style.display='block';document.getElementById('register-form').style.display='none';document.getElementById('login-error').style.display='none';}
+function showRegister(){document.getElementById('login-form').style.display='none';document.getElementById('register-form').style.display='block';document.getElementById('register-error').style.display='none';}
+function togglePw(id,btn){const inp=document.getElementById(id);if(inp.type==='password'){inp.type='text';btn.textContent='🙈';}else{inp.type='password';btn.textContent='👁';}}
+
+async function handleLogin(){
+  const email=document.getElementById('login-email').value.trim(),password=document.getElementById('login-password').value,errEl=document.getElementById('login-error'),btn=document.getElementById('login-btn');
+  if(!email||!password){showAuthError(errEl,'Please enter email and password');return;}
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Signing in...';
+  try{const r=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})});const d=await r.json();
+    if(d.success){authToken=d.token;currentUser=d.user;isGuestMode=false;localStorage.setItem('tl_token',authToken);updateUserUI();showLanding();toast(`Welcome back, ${d.user.name}!`,'success');}
+    else showAuthError(errEl,d.error||'Login failed');
+  }catch{showAuthError(errEl,'Could not connect to server');}
+  finally{btn.disabled=false;btn.innerHTML='<span>Sign in</span>';}
 }
 
-async function analyzeImage() {
-  const file = document.getElementById('image-input').files[0];
-  if (!file) return toast('Please select an image first', 'error');
-
-  setLoading('image-btn', true);
-  try {
-    const base64 = await fileToBase64(file);
-    const r = await fetch(`${API}/analyze/image`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64 })
-    });
-    const d = await r.json();
-    if (d.success) displayResults(d.data, 'image');
-    else showError(d.error || "Analysis failed");
-  } catch {
-    toast('Could not connect to backend', 'error');
-  } finally {
-    setLoading('image-btn', false);
-  }
+async function handleRegister(){
+  const name=document.getElementById('register-name').value.trim(),email=document.getElementById('register-email').value.trim(),password=document.getElementById('register-password').value,errEl=document.getElementById('register-error'),btn=document.getElementById('register-btn');
+  if(!name||!email||!password){showAuthError(errEl,'All fields are required');return;}
+  if(password.length<6){showAuthError(errEl,'Password must be at least 6 characters');return;}
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Creating account...';
+  try{const r=await fetch(`${API}/auth/register`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,email,password})});const d=await r.json();
+    if(d.success){authToken=d.token;currentUser=d.user;isGuestMode=false;localStorage.setItem('tl_token',authToken);updateUserUI();showLanding();toast(`Welcome to TruthLens, ${d.user.name}!`,'success');}
+    else showAuthError(errEl,d.error||'Registration failed');
+  }catch{showAuthError(errEl,'Could not connect to server');}
+  finally{btn.disabled=false;btn.innerHTML='<span>Create account</span>';}
 }
 
-function fileToBase64(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
+function continueAsGuest(){isGuestMode=true;currentUser=null;authToken=null;showLanding();}
+function showAuthError(el,msg){el.textContent=msg;el.style.display='block';}
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id)?.classList.add('active');}
+function showLanding(){showPage('landing-page');loadLandingStat();}
+function enterApp(){showPage('app-page');updateUserUI();loadHistory();loadStats();}
+function exitApp(){showLanding();}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');}
+function switchTab(tab,btn){document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('active'));document.getElementById(`tab-${tab}`)?.classList.add('active');btn.classList.add('active');document.getElementById('topbar-title').textContent=btn.textContent.trim().replace(/^[^\s]+\s/,'');document.getElementById('sidebar').classList.remove('open');if(tab==='history')loadHistory();if(tab==='stats')loadStats();}
+
+const BTN_LABELS={'text-btn':'Analyze Text →','image-btn':'Analyze Image →','article-btn':'Analyze Article →','compare-btn':'Compare Sources →','factcheck-btn':'Fact Check →'};
+function setLoading(id,l){const b=document.getElementById(id);if(!b)return;b.disabled=l;b.innerHTML=l?'<span class="spinner"></span> Analyzing...':(BTN_LABELS[id]||'Analyze →');}
+function authHeaders(){const h={'Content-Type':'application/json'};if(authToken)h['Authorization']=`Bearer ${authToken}`;return h;}
+
+async function loadLandingStat(){try{const r=await fetch(`${API}/stats`);const d=await r.json();const el=document.getElementById('stat-total');if(el&&d.data)el.textContent=d.data.totalAnalyses||0;}catch{}}
+
+async function analyzeText(){
+  const text=document.getElementById('text-input').value.trim();
+  if(!text||text.length<10)return toast('Please enter at least 10 characters','error');
+  setLoading('text-btn',true);
+  try{const r=await fetch(`${API}/analyze/text`,{method:'POST',headers:authHeaders(),body:JSON.stringify({text})});const d=await r.json();
+    if(d.success){displayResults(d.data,'text');if(d.warning)toast('⚠️ '+d.warning,'info',8000);}else showError(d.error||'Analysis failed');
+  }catch{toast('Could not connect to backend','error');}
+  finally{setLoading('text-btn',false);}
 }
 
-// ── Article Analysis ───────────────────────────────────────────────────────
+let imageBase64=null;
+function handleImageSelect(e){const file=e.target.files[0];if(!file)return;if(file.size>5*1024*1024)return toast('Image too large — max 5MB','error');const reader=new FileReader();reader.onload=ev=>{imageBase64=ev.target.result;const wrap=document.getElementById('image-preview-wrap');document.getElementById('image-preview').src=imageBase64;wrap.style.display='block';document.getElementById('upload-zone').style.display='none';};reader.readAsDataURL(file);}
+function clearImage(){imageBase64=null;document.getElementById('image-preview-wrap').style.display='none';document.getElementById('upload-zone').style.display='block';document.getElementById('image-input').value='';}
+async function analyzeImage(){if(!imageBase64)return toast('Please select an image first','error');setLoading('image-btn',true);try{const r=await fetch(`${API}/analyze/image`,{method:'POST',headers:authHeaders(),body:JSON.stringify({image:imageBase64})});const d=await r.json();if(d.success){displayResults(d.data,'image');if(d.warning)toast('⚠️ '+d.warning,'info',8000);}else showError(d.error||'Analysis failed');}catch{toast('Could not connect to backend','error');}finally{setLoading('image-btn',false);}}
 
-async function analyzeArticle() {
-  const url = document.getElementById('article-url').value.trim();
-  const content = document.getElementById('article-content').value.trim();
-  if (!url) return toast('Please enter the article URL', 'error');
-  if (!content || content.length < 20) return toast('Please paste the article content', 'error');
+async function analyzeArticle(){const url=document.getElementById('article-url').value.trim(),content=document.getElementById('article-content').value.trim();if(!url)return toast('Please enter the article URL','error');if(!content||content.length<20)return toast('Please paste the article content','error');setLoading('article-btn',true);try{const r=await fetch(`${API}/analyze/article`,{method:'POST',headers:authHeaders(),body:JSON.stringify({url,content})});const d=await r.json();if(d.success){displayResults(d.data,'article');if(d.warning)toast('⚠️ '+d.warning,'info',8000);}else showError(d.error||'Analysis failed');}catch{toast('Could not connect to backend','error');}finally{setLoading('article-btn',false);}}
 
-  setLoading('article-btn', true);
-  try {
-    const r = await fetch(`${API}/analyze/article`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, content })
-    });
-    const d = await r.json();
-    if (d.success) displayResults(d.data, 'article');
-    else showError(d.error || "Analysis failed");
-  } catch {
-    toast('Could not connect to backend', 'error');
-  } finally {
-    setLoading('article-btn', false);
-  }
+function addSource(){const list=document.getElementById('sources-list');const count=list.querySelectorAll('.source-item').length+1;const div=document.createElement('div');div.className='source-item';div.innerHTML=`<label>Source ${count}</label><textarea class="source-input" placeholder="Paste source ${count} text..." rows="4"></textarea>`;list.appendChild(div);}
+async function compareSources(){const inputs=document.querySelectorAll('.source-input');const sources=Array.from(inputs).map(i=>i.value.trim()).filter(Boolean);if(sources.length<2)return toast('Please enter at least 2 sources','error');setLoading('compare-btn',true);try{const r=await fetch(`${API}/analyze/compare`,{method:'POST',headers:authHeaders(),body:JSON.stringify({sources})});const d=await r.json();if(d.success){displayResults(d.data,'compare');if(d.warning)toast('⚠️ '+d.warning,'info',8000);}else showError(d.error||'Comparison failed');}catch{toast('Could not connect to backend','error');}finally{setLoading('compare-btn',false);}}
+
+function setFactCheck(c){document.getElementById('factcheck-input').value=c;}
+async function quickFactCheck(){const claim=document.getElementById('factcheck-input').value.trim();if(!claim)return toast('Please enter a claim','error');setLoading('factcheck-btn',true);try{const r=await fetch(`${API}/factcheck`,{method:'POST',headers:authHeaders(),body:JSON.stringify({claim})});const d=await r.json();if(d.success){displayFactCheckResult(d.data,claim);if(d.warning)toast('⚠️ '+d.warning,'info',8000);}else showError(d.error||'Fact check failed');}catch{toast('Could not connect to backend','error');}finally{setLoading('factcheck-btn',false);}}
+
+let allHistory=[];
+async function loadHistory(){try{const r=await fetch(`${API}/history?limit=100`,{headers:authHeaders()});const d=await r.json();allHistory=d.data||[];renderHistory(allHistory,null);const sub=document.getElementById('history-subtitle');if(sub)sub.textContent=isGuestMode?'Sign in to save your history':`${allHistory.length} analyses saved`;}catch{}}
+function filterHistory(type,btn){document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderHistory(type?allHistory.filter(i=>i.type===type):allHistory,type);}
+function renderHistory(items){const list=document.getElementById('history-list');if(!list)return;if(!items.length){list.innerHTML=`<div style="text-align:center;padding:3rem;color:var(--text3)">${isGuestMode?'🔒 Sign in to save and view your history':'No analyses yet!'}</div>`;return;}list.innerHTML=items.map(item=>{const score=item.credibilityScore||item.consistencyScore||0;const sc=score>=70?'score-hi':score>=40?'score-med':'score-lo';const cat=item.category||item.type||'analysis';const preview=item.inputPreview||item.claim||item.input_preview||'—';const date=new Date(item.createdAt||item.created_at).toLocaleDateString();return`<div class="history-item" onclick="restoreFromHistory('${item._id||item.id}')"><div class="hi-score ${sc}">${score}</div><div class="hi-body"><div class="hi-preview">${escHtml(preview.substring(0,80))}</div><div class="hi-meta">${item.type||'analysis'} · ${date}</div></div><div class="hi-cat verdict-badge ${cat}">${cat}</div></div>`;}).join('');}
+async function restoreFromHistory(id){const item=allHistory.find(i=>(i._id||i.id)==id);if(!item)return;displayResults(item.full_result||item,item.type);}
+
+async function loadStats(){try{const r=await fetch(`${API}/stats`,{headers:authHeaders()});const d=await r.json();const grid=document.getElementById('stats-grid');if(!grid||!d.data)return;if(isGuestMode){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text3)">🔒 Sign in to see your personal stats</div>`;return;}const{totalAnalyses,byType,byCategory,averageCredibilityScore}=d.data;const tm=(byType||[]).reduce((a,x)=>{a[x.type]=x.count;return a;},{});grid.innerHTML=`<div class="stat-card"><div class="stat-card-num">${totalAnalyses}</div><div class="stat-card-label">Total Analyses</div></div><div class="stat-card"><div class="stat-card-num">${averageCredibilityScore}%</div><div class="stat-card-label">Avg Credibility Score</div></div><div class="stat-card"><div class="stat-card-num">${tm.text||0}</div><div class="stat-card-label">Text Analyses</div></div><div class="stat-card"><div class="stat-card-num">${tm.article||0}</div><div class="stat-card-label">Articles Analyzed</div></div><div class="stat-card"><div class="stat-card-num">${tm.compare||0}</div><div class="stat-card-label">Comparisons</div></div><div class="stat-card"><div class="stat-card-num">${tm.image||0}</div><div class="stat-card-label">Images Checked</div></div>`;}catch{}}
+
+function displayResults(data,type){
+  const panel=document.getElementById('results-panel');
+  const score=data.credibilityScore??data.consistencyScore??50;
+  const ring=document.getElementById('ring-fill');
+  ring.style.strokeDashoffset=326.7-(score/100)*326.7;
+  ring.style.stroke=score>=70?'var(--green)':score>=40?'var(--warn)':'var(--red)';
+  document.getElementById('score-num').textContent=score;
+  document.getElementById('verdict-text').textContent=data.verdict||data.shortVerdict||'';
+  document.getElementById('result-timestamp').textContent=new Date().toLocaleString();
+  const cat=data.category||'unclear';
+  const badge=document.getElementById('verdict-badge');badge.textContent=cat.toUpperCase();badge.className=`verdict-badge ${cat}`;
+  document.getElementById('category-tag').textContent=type?`${type} analysis`:'';
+  let html='';
+  if(data.analysis)html+=card('🔍 Analysis',`<p class="prose">${escHtml(data.analysis)}</p>`);
+  const flags=data.redFlags||data.manipulationSigns||[];const pos=data.positiveSignals||data.authenticitySignals||[];
+  if(flags.length||pos.length){let inner='';if(flags.length)inner+=`<div style="margin-bottom:0.75rem"><div style="font-size:0.75rem;color:var(--red);font-weight:600;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:1px">🚩 Red Flags</div><div class="tag-list">${flags.map(f=>`<span class="tag red">${escHtml(f)}</span>`).join('')}</div></div>`;if(pos.length)inner+=`<div><div style="font-size:0.75rem;color:var(--green);font-weight:600;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:1px">✅ Positive Signals</div><div class="tag-list">${pos.map(p=>`<span class="tag green">${escHtml(p)}</span>`).join('')}</div></div>`;html+=card('🏷️ Signals',inner);}
+  if(data.specificClaims?.length){const rows=data.specificClaims.map((c,i)=>`<div class="kv-row"><div class="kv-key">${escHtml(c)}</div><div class="kv-val">${escHtml(data.claimVerdict?.[i]||data.claimAccuracy?.[i]||'')}</div></div>`).join('');html+=card('📋 Claims',rows);}
+  if(data.languageAnalysis){const la=data.languageAnalysis;let inner=`<div class="kv-row"><div class="kv-key">Tone</div><div class="kv-val">${escHtml(la.tone||'—')}</div></div><div class="kv-row"><div class="kv-key">Sensationalism</div><div class="kv-val">${escHtml(la.sensationalism||'—')}</div></div><div class="kv-row"><div class="kv-key">Readability</div><div class="kv-val">${escHtml(la.readabilityLevel||'—')}</div></div>`;if(la.emotionalWords?.length)inner+=`<div style="margin-top:0.5rem"><div style="font-size:0.72rem;color:var(--text3);margin-bottom:0.35rem">Emotional words</div><div class="tag-list">${la.emotionalWords.map(w=>`<span class="tag">${escHtml(w)}</span>`).join('')}</div></div>`;html+=card('💬 Language',inner);}
+  if(data.sourceAssessment){const sa=data.sourceAssessment;html+=card('🏢 Source',`<div class="kv-row"><div class="kv-key">Domain</div><div class="kv-val">${escHtml(sa.domain||'—')}</div></div><div class="kv-row"><div class="kv-key">Type</div><div class="kv-val">${escHtml(sa.domainType||'—')}</div></div><div class="kv-row"><div class="kv-key">Bias</div><div class="kv-val">${escHtml(sa.knownBias||'—')}</div></div><div class="kv-row"><div class="kv-key">Reliability</div><div class="kv-val">${escHtml(sa.reliabilityRating||'—')}</div></div>${sa.notes?`<p class="prose" style="margin-top:0.5rem">${escHtml(sa.notes)}</p>`:''}`); }
+  if(data.journalisticStandards){const js=data.journalisticStandards;const t=v=>v?'✅':'❌';html+=card('📐 Standards',`<div class="kv-row"><div class="kv-key">Has Author</div><div class="kv-val">${t(js.hasAuthor)}</div></div><div class="kv-row"><div class="kv-key">Has Date</div><div class="kv-val">${t(js.hasDate)}</div></div><div class="kv-row"><div class="kv-key">Has Sources</div><div class="kv-val">${t(js.hasSources)}</div></div><div class="kv-row"><div class="kv-key">Has Quotes</div><div class="kv-val">${t(js.hasQuotes)}</div></div><div class="kv-row"><div class="kv-key">Editorial</div><div class="kv-val">${escHtml(js.editorialStandards||'—')}</div></div>`);}
+  if(data.agreements?.length||data.disagreements?.length){let inner='';if(data.agreements?.length)inner+=`<div style="margin-bottom:0.75rem"><div style="font-size:0.72rem;color:var(--green);font-weight:600;margin-bottom:0.4rem">AGREEMENTS</div><div class="tag-list">${data.agreements.map(a=>`<span class="tag green">${escHtml(a)}</span>`).join('')}</div></div>`;if(data.disagreements?.length)inner+=`<div><div style="font-size:0.72rem;color:var(--red);font-weight:600;margin-bottom:0.4rem">CONFLICTS</div><div class="tag-list">${data.disagreements.map(a=>`<span class="tag red">${escHtml(a)}</span>`).join('')}</div></div>`;html+=card('🔀 Consistency',inner);}
+  if(data.verificationSteps?.length)html+=card('🔎 How to Verify',`<ol class="ol-list">${data.verificationSteps.map(s=>`<li>${escHtml(s)}</li>`).join('')}</ol>`);
+  if(data.suggestions?.length)html+=card('💡 Suggestions',`<div class="tag-list">${data.suggestions.map(s=>`<span class="tag blue">${escHtml(s)}</span>`).join('')}</div>`);
+  if(data.contextualBackground)html+=card('📚 Context',`<p class="prose">${escHtml(data.contextualBackground)}</p>`);
+  if(data.truthLikelihood)html+=card('⚖️ Truth Assessment',`<p class="prose">${escHtml(data.truthLikelihood)}</p>`);
+  document.getElementById('report-cards').innerHTML=html;
+  panel.style.display='block';
+  setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'start'}),100);
 }
 
-// ── Source Comparison ──────────────────────────────────────────────────────
-
-function addSource() {
-  const container = document.getElementById('sources-container');
-  const count = container.querySelectorAll('.source-row').length + 1;
-  if (count > 6) return toast('Maximum 6 sources', 'info');
-  const div = document.createElement('div');
-  div.className = 'source-row';
-  div.innerHTML = `
-    <span class="source-label">Source ${count}</span>
-    <textarea class="source-input" placeholder="Paste claim or excerpt..." rows="3"></textarea>
-  `;
-  container.appendChild(div);
+function displayFactCheckResult(data,claim){
+  const panel=document.getElementById('results-panel');
+  const score=data.confidence||50;
+  const vc={'TRUE':'var(--green)','FALSE':'var(--red)','MOSTLY TRUE':'var(--green)','MOSTLY FALSE':'var(--red)','MIXED':'var(--warn)','UNVERIFIABLE':'#94a3b8','OUTDATED':'var(--warn)'};
+  const color=vc[data.verdict]||'#94a3b8';
+  const ring=document.getElementById('ring-fill');ring.style.strokeDashoffset=326.7-(score/100)*326.7;ring.style.stroke=color;
+  document.getElementById('score-num').textContent=score;
+  const badge=document.getElementById('verdict-badge');badge.textContent=data.verdict||'UNVERIFIABLE';badge.className='verdict-badge '+(data.verdict==='TRUE'||data.verdict==='MOSTLY TRUE'?'real':data.verdict==='FALSE'||data.verdict==='MOSTLY FALSE'?'fake':'misleading');
+  document.getElementById('verdict-text').textContent=data.shortVerdict||'';
+  document.getElementById('category-tag').textContent='fact check';
+  document.getElementById('result-timestamp').textContent=new Date().toLocaleString();
+  let html=`<div class="rcard" style="border-color:${color}20"><div class="rcard-body open" style="padding-top:1rem"><div class="fact-verdict" style="background:${color}18;color:${color};border:1px solid ${color}30">${data.verdict}</div><p class="prose">${escHtml(data.explanation||'')}</p></div></div>`;
+  if(data.keyFacts?.length)html+=card('📌 Key Facts',`<ol class="ol-list">${data.keyFacts.map(f=>`<li>${escHtml(f)}</li>`).join('')}</ol>`);
+  if(data.context)html+=card('📚 Context',`<p class="prose">${escHtml(data.context)}</p>`);
+  if(data.specificSources?.length)html+=card('🔗 Verify At',`<ol class="ol-list">${data.specificSources.map(s=>`<li>${escHtml(s)}</li>`).join('')}</ol>`);
+  if(data.relatedMisconceptions?.length)html+=card('⚠️ Related Myths',`<div class="tag-list">${data.relatedMisconceptions.map(m=>`<span class="tag red">${escHtml(m)}</span>`).join('')}</div>`);
+  if(data.expertConsensus)html+=card('🎓 Expert Consensus',`<p class="prose">${escHtml(data.expertConsensus)}</p>`);
+  document.getElementById('report-cards').innerHTML=html;
+  panel.style.display='block';
+  setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'start'}),100);
 }
 
-async function compareSources() {
-  const inputs = document.querySelectorAll('.source-input');
-  const sources = Array.from(inputs).map(i => i.value.trim()).filter(v => v.length > 0);
-  if (sources.length < 2) return toast('Please enter at least 2 sources', 'error');
+function card(title,content){return`<div class="rcard"><div class="rcard-header" onclick="toggleCard(this)"><div class="rcard-title">${title}</div><div class="rcard-chevron">▼</div></div><div class="rcard-body open">${content}</div></div>`;}
+function toggleCard(h){h.classList.toggle('open');h.nextElementSibling.classList.toggle('open');}
+function closeResults(){document.getElementById('results-panel').style.display='none';}
 
-  setLoading('compare-btn', true);
-  try {
-    const r = await fetch(`${API}/analyze/compare`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sources })
-    });
-    const d = await r.json();
-    if (d.success) displayResults(d.data, 'compare');
-    else showError(d.error || "Comparison failed");
-  } catch {
-    toast('Could not connect to backend', 'error');
-  } finally {
-    setLoading('compare-btn', false);
-  }
-}
+function exportReport(){const score=document.getElementById('score-num').textContent,verdict=document.getElementById('verdict-text').textContent,cat=document.getElementById('verdict-badge').textContent,ts=document.getElementById('result-timestamp').textContent,cards=document.getElementById('report-cards').innerText;const text=`TruthLens Report\n${'='.repeat(40)}\nScore: ${score}/100\nCategory: ${cat}\nVerdict: ${verdict}\nDate: ${ts}\n\n${cards}`;const blob=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`truthlens-report-${Date.now()}.txt`;a.click();}
 
-// ── Quick Fact Check ───────────────────────────────────────────────────────
+function showError(msg){const isQ=msg.toLowerCase().includes('quota')||msg.toLowerCase().includes('429');const panel=document.getElementById('results-panel');document.getElementById('score-num').textContent='—';document.getElementById('ring-fill').style.strokeDashoffset=326.7;document.getElementById('ring-fill').style.stroke='var(--text3)';document.getElementById('verdict-badge').textContent='ERROR';document.getElementById('verdict-badge').className='verdict-badge unclear';document.getElementById('verdict-text').textContent='';document.getElementById('category-tag').textContent='';document.getElementById('result-timestamp').textContent=new Date().toLocaleString();document.getElementById('report-cards').innerHTML=`<div style="padding:2rem;text-align:center"><div style="font-size:3rem;margin-bottom:1rem">${isQ?'⚠️':'❌'}</div><h3 style="font-family:'Syne',sans-serif;color:${isQ?'var(--warn)':'var(--red)'};margin-bottom:0.75rem">${isQ?'Quota Exceeded':'Analysis Failed'}</h3><p style="color:var(--text2);line-height:1.7;max-width:500px;margin:0 auto 1.5rem">${escHtml(msg)}</p><button class="btn-secondary" onclick="closeResults()">Dismiss</button></div>`;panel.style.display='block';setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'start'}),100);}
 
-function setFactCheck(claim) {
-  document.getElementById('factcheck-input').value = claim;
-}
-
-async function quickFactCheck() {
-  const claim = document.getElementById('factcheck-input').value.trim();
-  if (!claim) return toast('Please enter a claim to check', 'error');
-
-  setLoading('factcheck-btn', true);
-  try {
-    const r = await fetch(`${API}/factcheck`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ claim })
-    });
-    const d = await r.json();
-    if (d.success) displayFactCheckResult(d.data, claim);
-    else showError(d.error || "Fact check failed");
-  } catch {
-    toast('Could not connect to backend', 'error');
-  } finally {
-    setLoading('factcheck-btn', false);
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// DISPLAY RESULTS — handles all analysis types
-// ════════════════════════════════════════════════════════════════════════════
-
-function displayResults(data, type) {
-  const panel = document.getElementById('results-panel');
-  const score = data.credibilityScore || data.consistencyScore || 0;
-  const category = (data.category || 'unclear').toLowerCase();
-
-  // Score ring
-  document.getElementById('score-num').textContent = score;
-  const offset = 326.7 - (score / 100) * 326.7;
-  const ring = document.getElementById('ring-fill');
-  ring.style.strokeDashoffset = offset;
-  ring.style.stroke = score >= 70 ? '#22c55e' : score >= 45 ? '#eab308' : '#ef4444';
-
-  // Verdict badge
-  const badge = document.getElementById('verdict-badge');
-  badge.textContent = category.toUpperCase();
-  badge.className = 'verdict-badge ' + category;
-
-  document.getElementById('verdict-text').textContent = data.verdict || data.analysis || '';
-  document.getElementById('category-tag').textContent = `🏷️ ${type.toUpperCase()} ANALYSIS`;
-  document.getElementById('result-timestamp').textContent = new Date().toLocaleString();
-
-  document.getElementById('report-cards').innerHTML = buildReportCards(data, type);
-
-  panel.style.display = 'block';
-  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-  toast('Analysis complete', 'success');
-}
-
-function buildReportCards(data, type) {
-  let html = '';
-
-  // ── Contextual background (text type)
-  if (data.contextualBackground) {
-    html += rcard('🌐', 'Background Context', `<p>${data.contextualBackground}</p>`);
-  }
-
-  // ── Main analysis
-  if (data.analysis) {
-    html += rcard('📊', 'Full Analysis', `<p>${data.analysis}</p>`);
-  }
-
-  // ── Specific claims + verdicts (the most important part)
-  const claims = data.specificClaims || data.factualClaims || [];
-  const verdicts = data.claimVerdict || data.claimAccuracy || [];
-  if (claims.length) {
-    let claimHtml = '<ul class="numbered-list">';
-    claims.forEach((claim, i) => {
-      const v = verdicts[i] || '';
-      const vClass = v.toLowerCase().includes('true') ? 'tag--green'
-        : v.toLowerCase().includes('false') ? 'tag--red'
-        : 'tag--yellow';
-      claimHtml += `<li>
-        <span class="nl-num">${String(i+1).padStart(2,'0')}</span>
-        <span>
-          <strong>${claim}</strong>
-          ${v ? `<br><span class="tag ${vClass}" style="margin-top:0.3rem;display:inline-block">${v}</span>` : ''}
-        </span>
-      </li>`;
-    });
-    claimHtml += '</ul>';
-    html += rcard('🔍', 'Specific Claims & Verdicts', claimHtml);
-  }
-
-  // ── Red flags
-  if ((data.redFlags || []).length) {
-    html += rcard('🚩', 'Red Flags', tagList(data.redFlags, 'red'));
-  }
-
-  // ── Positive signals
-  const pos = data.positiveSignals || data.authenticitySignals || [];
-  if (pos.length) {
-    html += rcard('✅', 'Credibility Signals', tagList(pos, 'green'));
-  }
-
-  // ── Language analysis (text)
-  if (data.languageAnalysis) {
-    const la = data.languageAnalysis;
-    html += rcard('🗣️', 'Language Analysis', `
-      <div class="kv-grid">
-        <div class="kv-item"><div class="kv-label">Tone</div>
-          <div class="kv-value ${['neutral','balanced','matter-of-fact'].includes(la.tone) ? 'good' : 'warn'}">${la.tone || '—'}</div></div>
-        <div class="kv-item"><div class="kv-label">Sensationalism</div>
-          <div class="kv-value ${la.sensationalism === 'low' ? 'good' : la.sensationalism === 'high' ? 'bad' : 'warn'}">${la.sensationalism || '—'}</div></div>
-        <div class="kv-item"><div class="kv-label">Reading Level</div>
-          <div class="kv-value neutral">${la.readabilityLevel || '—'}</div></div>
-        <div class="kv-item"><div class="kv-label">Loaded Words</div>
-          <div class="kv-value neutral">${(la.emotionalWords || []).slice(0,5).join(', ') || 'None detected'}</div></div>
-      </div>
-    `);
-  }
-
-  // ── Source assessment (article)
-  if (data.sourceAssessment) {
-    const sa = data.sourceAssessment;
-    html += rcard('🌐', 'Source Assessment', `
-      <div class="kv-grid">
-        <div class="kv-item"><div class="kv-label">Domain</div><div class="kv-value neutral">${sa.domain || '—'}</div></div>
-        <div class="kv-item"><div class="kv-label">Type</div><div class="kv-value neutral">${sa.domainType || '—'}</div></div>
-        <div class="kv-item"><div class="kv-label">Reliability</div>
-          <div class="kv-value ${sa.reliabilityRating === 'high' ? 'good' : sa.reliabilityRating === 'low' ? 'bad' : 'warn'}">${sa.reliabilityRating || '—'}</div></div>
-        <div class="kv-item"><div class="kv-label">Political Bias</div><div class="kv-value neutral">${sa.knownBias || 'unknown'}</div></div>
-      </div>
-      ${sa.notes ? `<p style="margin-top:0.85rem;font-size:0.85rem;color:var(--text2);line-height:1.6">${sa.notes}</p>` : ''}
-    `);
-  }
-
-  // ── Journalistic standards
-  if (data.journalisticStandards) {
-    const js = data.journalisticStandards;
-    const checks = [
-      { label: 'Has Author', val: js.hasAuthor },
-      { label: 'Has Date', val: js.hasDate },
-      { label: 'Cites Sources', val: js.hasSources },
-      { label: 'Uses Quotes', val: js.hasQuotes },
-    ];
-    html += rcard('📋', 'Journalistic Standards', `
-      <div class="tag-list">
-        ${checks.map(c => `<span class="tag ${c.val ? 'tag--green' : 'tag--red'}">${c.val ? '✓' : '✗'} ${c.label}</span>`).join('')}
-        ${js.editorialStandards ? `<span class="tag tag--gray">Editorial: ${js.editorialStandards}</span>` : ''}
-      </div>
-    `);
-  }
-
-  // ── Technical forensics (image)
-  if (data.technicalAnalysis) {
-    const ta = data.technicalAnalysis;
-    const colorVal = (k, v) => {
-      const good = { compressionArtifacts: 'none', lightingConsistency: 'consistent', shadowAnalysis: 'natural', edgeAnalysis: 'clean', noisePattern: 'uniform' };
-      const bad =  { compressionArtifacts: 'significant', lightingConsistency: 'inconsistent', shadowAnalysis: 'unnatural', edgeAnalysis: 'suspicious', noisePattern: 'inconsistent' };
-      if (v === good[k]) return 'good';
-      if (v === bad[k]) return 'bad';
-      return 'neutral';
-    };
-    html += rcard('🔬', 'Technical Forensics', `
-      <div class="kv-grid">
-        ${Object.entries(ta).map(([k, v]) => `
-          <div class="kv-item">
-            <div class="kv-label">${k.replace(/([A-Z])/g, ' $1').trim()}</div>
-            <div class="kv-value ${colorVal(k, v)}">${v}</div>
-          </div>`).join('')}
-      </div>
-    `);
-  }
-
-  // ── AI generation indicators (image)
-  if ((data.aiGenerationIndicators || []).filter(Boolean).length) {
-    html += rcard('🤖', 'AI Generation Indicators', tagList(data.aiGenerationIndicators, 'blue'));
-  }
-
-  // ── Text in image
-  if (data.textInImage && data.textInImage !== 'none' && data.textInImage !== 'unknown') {
-    html += rcard('📝', 'Text Found in Image', `<p style="font-style:italic;color:var(--text2)">"${data.textInImage}"</p>`);
-  }
-
-  // ── Context clues (image)
-  if ((data.contextClues || []).filter(Boolean).length) {
-    html += rcard('🗺️', 'Context Clues', tagList(data.contextClues, 'gray'));
-  }
-
-  // ── Compare: agreements & disagreements
-  if ((data.agreements || []).length) {
-    html += rcard('🤝', 'What Sources Agree On', tagList(data.agreements, 'green'));
-  }
-  if ((data.disagreements || []).length) {
-    html += rcard('⚡', 'Key Disagreements', tagList(data.disagreements, 'red'));
-  }
-  if (data.factualConsistency) {
-    const fc = data.factualConsistency;
-    let body = '';
-    if (fc.consistentFacts?.length) body += `<p class="fc-sublabel">Consistent facts</p>${tagList(fc.consistentFacts, 'green')}`;
-    if (fc.conflictingFacts?.length) body += `<p class="fc-sublabel" style="margin-top:0.75rem">Conflicting facts</p>${tagList(fc.conflictingFacts, 'red')}`;
-    if (fc.uniqueClaims?.length) body += `<p class="fc-sublabel" style="margin-top:0.75rem">Unique claims (only one source)</p>${tagList(fc.uniqueClaims, 'yellow')}`;
-    if (body) html += rcard('🧮', 'Factual Consistency Breakdown', body);
-  }
-  if (data.mostReliableSource) {
-    html += rcard('🏆', 'Most Reliable Source', `<p>${data.mostReliableSource}</p>`);
-  }
-  if (data.truthLikelihood) {
-    html += rcard('🎯', 'Truth Assessment', `<p>${data.truthLikelihood}</p>`);
-  }
-  if ((data.narrativeDifferences || []).length) {
-    html += rcard('📖', 'Narrative Framing Differences', numberedList(data.narrativeDifferences));
-  }
-  if ((data.biasComparison || []).length) {
-    html += rcard('⚖️', 'Bias Comparison', tagList(data.biasComparison, 'yellow'));
-  }
-
-  // ── Bias indicators (article)
-  if ((data.biasIndicators || []).length) {
-    html += rcard('📡', 'Bias Indicators', tagList(data.biasIndicators, 'yellow'));
-  }
-
-  // ── Misinformation patterns
-  if ((data.similarFakePatterns || []).filter(Boolean).length) {
-    html += rcard('🔗', 'Known Misinformation Patterns', tagList(data.similarFakePatterns, 'yellow'));
-  }
-
-  // ── Trustworthiness badges
-  const badges = data.trustworthinessBadges || data.forensicBadges || [];
-  if (badges.filter(Boolean).length) {
-    html += rcard('🛡️', 'Credibility Badges', tagList(badges, 'blue'));
-  }
-
-  // ── Verification steps
-  const steps = data.verificationSteps || data.recommendations || [];
-  if (steps.length) {
-    html += rcard('📌', 'How to Verify', numberedList(steps));
-  }
-
-  // ── Related credible sources
-  if ((data.relatedCredibleSources || []).length) {
-    html += rcard('🌍', 'Credible Sources to Check', tagList(data.relatedCredibleSources, 'blue'));
-  }
-
-  // ── Suggestions (always last)
-  if ((data.suggestions || []).length) {
-    html += rcard('💡', 'Next Steps', numberedList(data.suggestions));
-  }
-
-  return html;
-}
-
-// ── Fact check display ─────────────────────────────────────────────────────
-
-function displayFactCheckResult(data, claim) {
-  const panel = document.getElementById('results-panel');
-  const score = data.confidence || 0;
-  const verdict = (data.verdict || 'UNVERIFIABLE').toUpperCase();
-
-  // Score ring
-  document.getElementById('score-num').textContent = score;
-  const offset = 326.7 - (score / 100) * 326.7;
-  const ring = document.getElementById('ring-fill');
-  ring.style.strokeDashoffset = offset;
-  ring.style.stroke = ['TRUE','MOSTLY TRUE'].includes(verdict) ? '#22c55e'
-    : ['FALSE','MOSTLY FALSE'].includes(verdict) ? '#ef4444'
-    : '#eab308';
-
-  // Verdict
-  const badge = document.getElementById('verdict-badge');
-  badge.textContent = verdict;
-  badge.className = `verdict-badge ${verdict.toLowerCase().replace(/\s+/g, '-')}`;
-
-  document.getElementById('verdict-text').textContent = data.shortVerdict || `Claim: "${claim}"`;
-  document.getElementById('category-tag').textContent = '⚡ QUICK FACT CHECK';
-  document.getElementById('result-timestamp').textContent = new Date().toLocaleString();
-
-  let html = '';
-
-  // Short verdict callout
-  if (data.shortVerdict) {
-    const color = ['TRUE','MOSTLY TRUE'].includes(verdict) ? 'var(--green)'
-      : ['FALSE','MOSTLY FALSE'].includes(verdict) ? 'var(--red)' : 'var(--yellow)';
-    html += `<div class="rcard" style="border-color:${color};background:rgba(0,0,0,0.2)">
-      <div style="padding:0.5rem 0;font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:${color}">${data.shortVerdict}</div>
-    </div>`;
-  }
-
-  if (data.explanation) {
-    html += rcard('📋', 'Verdict Explanation', `<p>${data.explanation}</p>`);
-  }
-  if (data.expertConsensus) {
-    html += rcard('🔬', 'Expert / Scientific Consensus', `<p>${data.expertConsensus}</p>`);
-  }
-  if ((data.keyFacts || []).length) {
-    html += rcard('📌', 'Key Facts', numberedList(data.keyFacts));
-  }
-  if (data.context) {
-    html += rcard('🔍', 'Important Context', `<p>${data.context}</p>`);
-  }
-  if (data.originOfClaim) {
-    html += rcard('📡', 'Origin of this Claim', `<p>${data.originOfClaim}</p>`);
-  }
-  if ((data.specificSources || data.sources || []).length) {
-    const srcs = data.specificSources || data.sources || [];
-    html += rcard('🌐', 'Verify At These Sources', tagList(srcs, 'blue'));
-  }
-  if ((data.relatedMisconceptions || []).length) {
-    html += rcard('⚠️', 'Related Misconceptions', tagList(data.relatedMisconceptions, 'yellow'));
-  }
-
-  document.getElementById('report-cards').innerHTML = html;
-  panel.style.display = 'block';
-  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-  toast('Fact check complete', 'success');
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function rcard(icon, title, bodyHtml) {
-  return `
-    <div class="rcard">
-      <div class="rcard-header" onclick="toggleCard(this)">
-        <div class="rcard-title">
-          <span class="rcard-icon">${icon}</span>
-          <span>${title}</span>
-        </div>
-        <span class="rcard-toggle">▾</span>
-      </div>
-      <div class="rcard-body">${bodyHtml}</div>
-    </div>`;
-}
-
-function toggleCard(header) {
-  const body = header.nextElementSibling;
-  const toggle = header.querySelector('.rcard-toggle');
-  if (body.style.display === 'none') {
-    body.style.display = 'block';
-    toggle.style.transform = 'rotate(0deg)';
-  } else {
-    body.style.display = 'none';
-    toggle.style.transform = 'rotate(-90deg)';
-  }
-}
-
-function tagList(items, color) {
-  if (!items || !items.length) return '<p style="color:var(--text3);font-size:0.85rem">None detected</p>';
-  return `<div class="tag-list">${items.filter(Boolean).map(i => `<span class="tag tag--${color}">${i}</span>`).join('')}</div>`;
-}
-
-function numberedList(items) {
-  if (!items || !items.length) return '<p style="color:var(--text3);font-size:0.85rem">None</p>';
-  return `<ul class="numbered-list">${items.filter(Boolean).map((item, i) =>
-    `<li><span class="nl-num">${String(i+1).padStart(2,'0')}</span><span>${item}</span></li>`
-  ).join('')}</ul>`;
-}
-
-// ── Results controls ───────────────────────────────────────────────────────
-
-function closeResults() {
-  document.getElementById('results-panel').style.display = 'none';
-}
-
-function exportReport() {
-  const score = document.getElementById('score-num').textContent;
-  const verdict = document.getElementById('verdict-badge').textContent;
-  const cards = document.getElementById('report-cards').innerText;
-  const ts = document.getElementById('result-timestamp').textContent;
-
-  const text = `TRUTHLENS CREDIBILITY REPORT
-Generated: ${ts}
-SCORE: ${score}/100
-VERDICT: ${verdict}
-
-${'─'.repeat(50)}
-${cards}
-${'─'.repeat(50)}
-Generated by TruthLens — AI Credibility Intelligence
-`;
-
-  const blob = new Blob([text], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `truthlens-report-${Date.now()}.txt`;
-  a.click();
-  toast('Report downloaded', 'success');
-}
-
-// ── History ────────────────────────────────────────────────────────────────
-
-async function loadHistory() {
-  const container = document.getElementById('history-list');
-  if (!container) return;
-  const type = document.getElementById('history-filter')?.value || '';
-
-  container.innerHTML = '<div class="loading-state">Loading...</div>';
-  try {
-    const url = `${API}/history?limit=50${type ? `&type=${type}` : ''}`;
-    const r = await fetch(url);
-    const d = await r.json();
-    if (!d.success || !d.data.length) {
-      container.innerHTML = '<div class="loading-state">No analyses yet — run your first check!</div>';
-      return;
-    }
-    container.innerHTML = d.data.map(historyItem).join('');
-  } catch {
-    container.innerHTML = '<div class="loading-state">Could not load history — backend offline?</div>';
-  }
-}
-
-function historyItem(item) {
-  const score = item.credibility_score || 0;
-  const scoreClass = score >= 70 ? 'high' : score >= 45 ? 'mid' : 'low';
-  const catClass = (item.category || 'unclear').toLowerCase();
-  const date = new Date(item.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-
-  return `
-    <div class="history-item" onclick="restoreFromHistory(${item.id})">
-      <div class="hi-score ${scoreClass}">${score}%</div>
-      <div class="hi-body">
-        <div class="hi-preview">${item.input_preview || '[image or upload]'}</div>
-        <div class="hi-meta">
-          <span class="hi-type">${item.type}</span>
-          <span class="hi-cat ${catClass}">${(item.category || 'unclear').toUpperCase()}</span>
-          <span class="hi-date">${date}</span>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function restoreFromHistory(id) {
-  try {
-    const r = await fetch(`${API}/history?limit=200`);
-    const d = await r.json();
-    const item = d.data.find(i => i.id === id);
-    if (item?.full_result) {
-      displayResults(item.full_result, item.type);
-    }
-  } catch {}
-}
-
-// ── Stats ──────────────────────────────────────────────────────────────────
-
-async function loadStats() {
-  const container = document.getElementById('stats-content');
-  if (!container) return;
-  try {
-    const r = await fetch(`${API}/stats`);
-    const d = await r.json();
-    if (!d.success) throw new Error();
-    container.innerHTML = renderStats(d.data);
-  } catch {
-    container.innerHTML = '<div class="loading-state">Could not load stats — backend offline?</div>';
-  }
-}
-
-function renderStats(data) {
-  const byType = data.byType || [];
-  const byCategory = data.byCategory || [];
-  const total = data.totalAnalyses || 0;
-  const typeIcons = { text: '📝', image: '🖼️', article: '📰', compare: '⚖️', factcheck: '⚡' };
-
-  return `
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-card-num">${total}</div>
-        <div class="stat-card-label">Total Analyses</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-num">${data.averageCredibilityScore || 0}%</div>
-        <div class="stat-card-label">Avg. Credibility Score</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-num">${byCategory.find(c => c.category === 'fake')?.count || 0}</div>
-        <div class="stat-card-label">Fake Detected</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-card-num">${byCategory.find(c => c.category === 'real')?.count || 0}</div>
-        <div class="stat-card-label">Verified Real</div>
-      </div>
-    </div>
-    <div class="rcard" style="margin-bottom:1rem">
-      <div class="rcard-header"><div class="rcard-title"><span>📊</span><span>By Type</span></div></div>
-      <div class="rcard-body">
-        ${byType.map(t => `
-          <div class="dist-row">
-            <div class="dist-label">${typeIcons[t.type] || '📋'} ${t.type}</div>
-            <div class="dist-bar-wrap"><div class="dist-bar"><div class="dist-bar-fill" style="width:${total ? Math.round((t.count/total)*100) : 0}%"></div></div></div>
-            <div class="dist-count">${t.count}</div>
-          </div>`).join('') || '<p style="color:var(--text3);font-size:0.85rem">No data yet</p>'}
-      </div>
-    </div>
-    <div class="rcard">
-      <div class="rcard-header"><div class="rcard-title"><span>🏷️</span><span>By Category</span></div></div>
-      <div class="rcard-body">
-        ${byCategory.map(c => `
-          <div class="dist-row">
-            <div class="dist-label" style="width:110px">${c.category}</div>
-            <div class="dist-bar-wrap"><div class="dist-bar"><div class="dist-bar-fill" style="width:${total ? Math.round((c.count/total)*100) : 0}%;background:${catColor(c.category)}"></div></div></div>
-            <div class="dist-count">${c.count}</div>
-          </div>`).join('') || '<p style="color:var(--text3);font-size:0.85rem">No data yet</p>'}
-      </div>
-    </div>`;
-}
-
-function catColor(cat) {
-  const m = { real: '#22c55e', authentic: '#22c55e', fake: '#ef4444', manipulated: '#ef4444', misleading: '#fb923c', clickbait: '#eab308', 'ai-generated': '#3b82f6', satire: '#8b5cf6' };
-  return m[cat] || '#64748b';
-}
-
-// ── Error display ──────────────────────────────────────────────────────────
-function showError(msg) {
-  // Check if it's a quota error
-  const isQuota = msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('429');
-  const isKey = msg.toLowerCase().includes('api key') || msg.toLowerCase().includes('aistudio');
-
-  const panel = document.getElementById('results-panel');
-  const icon = isQuota ? '⚠️' : '❌';
-  const title = isQuota ? 'API Quota Exceeded' : 'Analysis Failed';
-  const color = isQuota ? 'var(--warn)' : 'var(--red)';
-
-  let html = `
-    <div style="padding:2rem;text-align:center">
-      <div style="font-size:3rem;margin-bottom:1rem">${icon}</div>
-      <h3 style="font-family:'Syne',sans-serif;color:${color};margin-bottom:0.75rem;font-size:1.3rem">${title}</h3>
-      <p style="color:var(--text2);line-height:1.7;margin-bottom:1.5rem;max-width:500px;margin-left:auto;margin-right:auto">${msg}</p>
-  `;
-
-  if (isQuota) {
-    html += `
-      <div style="background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);border-radius:12px;padding:1.25rem;max-width:480px;margin:0 auto;text-align:left">
-        <p style="font-weight:600;margin-bottom:0.75rem;color:var(--text)">🔑 Fix: Get a fresh API key</p>
-        <ol style="color:var(--text2);font-size:0.88rem;line-height:1.8;padding-left:1.25rem">
-          <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/app/apikey</a></li>
-          <li>Click <strong>"Create API key"</strong></li>
-          <li>Copy the new key</li>
-          <li>Open <code style="background:var(--bg3);padding:0.1rem 0.4rem;border-radius:4px">backend/.env</code></li>
-          <li>Replace <code style="background:var(--bg3);padding:0.1rem 0.4rem;border-radius:4px">GEMINI_API_KEY=</code> with the new key</li>
-          <li>Restart the server: <code style="background:var(--bg3);padding:0.1rem 0.4rem;border-radius:4px">npm run dev</code></li>
-        </ol>
-      </div>
-      <p style="margin-top:1rem;font-size:0.8rem;color:var(--text3)">Free tier gives ~1,500 requests/day per key. Each new Google account = new quota.</p>
-    `;
-  }
-
-  html += `<button class="btn-secondary" onclick="closeResults()" style="margin-top:1.5rem">Dismiss</button></div>`;
-
-  // Update panel header simply
-  document.getElementById('score-num').textContent = '—';
-  document.getElementById('ring-fill').style.strokeDashoffset = 326.7;
-  document.getElementById('ring-fill').style.stroke = 'var(--text3)';
-  document.getElementById('verdict-badge').textContent = 'ERROR';
-  document.getElementById('verdict-badge').className = 'verdict-badge unclear';
-  document.getElementById('verdict-text').textContent = '';
-  document.getElementById('category-tag').textContent = '';
-  document.getElementById('result-timestamp').textContent = new Date().toLocaleString();
-  document.getElementById('report-cards').innerHTML = html;
-
-  panel.style.display = 'block';
-  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
-}
+function toast(msg,type='info',duration=4000){const c=document.getElementById('toast-container');const el=document.createElement('div');el.className=`toast ${type}`;el.textContent=msg;c.appendChild(el);setTimeout(()=>el.remove(),duration);}
+function escHtml(str){if(!str)return'';return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}

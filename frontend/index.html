@@ -1,23 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>TruthLens — AI Credibility Intelligence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-<!-- ═══════════════════════ LANDING PAGE ═══════════════════════ -->
-<div id="landing-page" class="page active">
-
-  <!-- Noise overlay -->
+<!-- ═══════════════ AUTH PAGE ═══════════════ -->
+<div id="auth-page" class="page active">
   <div class="noise"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
 
-  <!-- Floating orbs -->
+  <div class="auth-container">
+    <div class="auth-brand">
+      <div class="auth-logo"><span class="logo-icon">⬡</span> TruthLens</div>
+      <p class="auth-tagline">AI-powered truth detection for the information age</p>
+    </div>
+
+    <!-- Login Form -->
+    <div class="auth-card" id="login-form">
+      <div class="auth-card-header">
+        <h2>Welcome back</h2>
+        <p>Sign in to your account</p>
+      </div>
+      <div class="auth-error" id="login-error" style="display:none"></div>
+      <div class="auth-field">
+        <label>Email address</label>
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <label>Password</label>
+        <div class="pw-wrap">
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"/>
+          <button class="pw-toggle" onclick="togglePw('login-password',this)">👁</button>
+        </div>
+      </div>
+      <button class="auth-btn" id="login-btn" onclick="handleLogin()">
+        <span>Sign in</span>
+      </button>
+      <div class="auth-divider"><span>or</span></div>
+      <button class="auth-btn auth-btn-ghost" onclick="continueAsGuest()">Continue as Guest</button>
+      <p class="auth-switch">Don't have an account? <a onclick="showRegister()">Create one →</a></p>
+    </div>
+
+    <!-- Register Form -->
+    <div class="auth-card" id="register-form" style="display:none">
+      <div class="auth-card-header">
+        <h2>Create account</h2>
+        <p>Join TruthLens for free</p>
+      </div>
+      <div class="auth-error" id="register-error" style="display:none"></div>
+      <div class="auth-field">
+        <label>Full name</label>
+        <input type="text" id="register-name" placeholder="Your name" autocomplete="name"/>
+      </div>
+      <div class="auth-field">
+        <label>Email address</label>
+        <input type="email" id="register-email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <label>Password <span style="color:var(--text3);font-size:0.75rem">(min 6 characters)</span></label>
+        <div class="pw-wrap">
+          <input type="password" id="register-password" placeholder="••••••••" autocomplete="new-password"/>
+          <button class="pw-toggle" onclick="togglePw('register-password',this)">👁</button>
+        </div>
+      </div>
+      <button class="auth-btn" id="register-btn" onclick="handleRegister()">
+        <span>Create account</span>
+      </button>
+      <div class="auth-divider"><span>or</span></div>
+      <button class="auth-btn auth-btn-ghost" onclick="continueAsGuest()">Continue as Guest</button>
+      <p class="auth-switch">Already have an account? <a onclick="showLogin()">Sign in →</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ LANDING PAGE ═══════════════ -->
+<div id="landing-page" class="page">
+  <div class="noise"></div>
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
   <div class="orb orb-3"></div>
@@ -30,143 +97,60 @@
     <div class="land-nav-links">
       <a href="#features">Features</a>
       <a href="#how-it-works">How It Works</a>
-      <button class="nav-cta" onclick="enterApp()">Launch App →</button>
+      <div id="nav-user-area">
+        <button class="nav-cta" onclick="enterApp()">Launch App →</button>
+      </div>
     </div>
   </nav>
 
   <section class="hero">
     <div class="hero-eyebrow">
-      <span class="badge">⚡ Powered by Gemini AI</span>
+      <span class="badge">⚡ Powered by Groq AI</span>
     </div>
-    <h1 class="hero-title">
-      See through the<br/>
-      <span class="title-gradient">noise.</span>
-    </h1>
-    <p class="hero-sub">
-      TruthLens is your AI-powered truth detector. Analyze news, images, 
-      and articles for credibility — in seconds. Because in 2025, 
-      what's real shouldn't be a mystery.
-    </p>
+    <h1 class="hero-title">See through the<br/><span class="title-gradient">noise.</span></h1>
+    <p class="hero-sub">TruthLens is your AI-powered truth detector. Analyze news, images, and articles for credibility — in seconds.</p>
     <div class="hero-actions">
-      <button class="btn-primary" onclick="enterApp()">
-        Get Started
-        <span class="btn-arrow">→</span>
-      </button>
-      <button class="btn-ghost" onclick="document.getElementById('how-it-works').scrollIntoView({behavior:'smooth'})">
-        See how it works
-      </button>
+      <button class="btn-primary" onclick="enterApp()">Get Started <span class="btn-arrow">→</span></button>
+      <button class="btn-ghost" onclick="document.getElementById('how-it-works').scrollIntoView({behavior:'smooth'})">See how it works</button>
     </div>
     <div class="hero-stats">
-      <div class="stat-pill">
-        <span class="stat-num" id="stat-total">—</span>
-        <span class="stat-label">Analyses run</span>
-      </div>
+      <div class="stat-pill"><span class="stat-num" id="stat-total">—</span><span class="stat-label">Analyses run</span></div>
       <div class="stat-divider"></div>
-      <div class="stat-pill">
-        <span class="stat-num">4</span>
-        <span class="stat-label">Analysis modes</span>
-      </div>
+      <div class="stat-pill"><span class="stat-num">4</span><span class="stat-label">Analysis modes</span></div>
       <div class="stat-divider"></div>
-      <div class="stat-pill">
-        <span class="stat-num">0.1s</span>
-        <span class="stat-label">Avg response</span>
-      </div>
+      <div class="stat-pill"><span class="stat-num">Free</span><span class="stat-label">Forever</span></div>
     </div>
   </section>
 
-  <!-- Features -->
-  <section class="features" id="features">
-    <div class="section-tag">What we offer</div>
-    <h2 class="section-title">Every angle. Covered.</h2>
+  <section id="features" class="features-section">
+    <div class="section-label">What TruthLens can do</div>
     <div class="features-grid">
-      <div class="feat-card feat-card--accent">
-        <div class="feat-icon">📝</div>
-        <h3>Text Analysis</h3>
-        <p>Paste any news snippet, social post, or claim. Get instant credibility scoring with linguistic analysis and red flag detection.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">🖼️</div>
-        <h3>Image Forensics</h3>
-        <p>Detect AI-generated or manipulated images. Our vision model analyzes lighting, shadows, compression artifacts, and edge patterns.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">📰</div>
-        <h3>Article Deep Dive</h3>
-        <p>Full article analysis including source credibility, journalistic standards assessment, bias detection, and verification steps.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">⚖️</div>
-        <h3>Source Compare</h3>
-        <p>Compare multiple claims side-by-side. Identify contradictions, find the most reliable version, and spot coordinated narratives.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">⚡</div>
-        <h3>Quick Fact Check</h3>
-        <p>Type any claim, get an instant TRUE/FALSE verdict with confidence score and sources to verify. Speed-checking for the scroll era.</p>
-      </div>
-      <div class="feat-card">
-        <div class="feat-icon">📊</div>
-        <h3>History & Stats</h3>
-        <p>Every analysis is saved locally. Track patterns, review past checks, and see your personal credibility dashboard.</p>
-      </div>
+      <div class="feature-card"><div class="feature-icon">📝</div><h3>Text Analysis</h3><p>Paste any claim, headline, or news snippet. Get credibility score, red flags, and fact-check steps.</p></div>
+      <div class="feature-card"><div class="feature-icon">🖼️</div><h3>Image Verification</h3><p>Upload suspicious images. Get guided forensic analysis and links to the best verification tools.</p></div>
+      <div class="feature-card"><div class="feature-icon">📰</div><h3>Article Analysis</h3><p>Drop in any article URL and content. Analyze source bias, journalistic standards, and specific claims.</p></div>
+      <div class="feature-card"><div class="feature-icon">⚡</div><h3>Quick Fact Check</h3><p>Ask anything. Get a verdict, confidence score, and specific sources to verify the claim yourself.</p></div>
     </div>
   </section>
 
-  <!-- How it works -->
-  <section class="how" id="how-it-works">
-    <div class="section-tag">Process</div>
-    <h2 class="section-title">Three steps to the truth.</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">01</div>
-        <div class="step-body">
-          <h3>Paste or upload</h3>
-          <p>Drop in text, an image, an article URL, or multiple claims to compare.</p>
-        </div>
-      </div>
-      <div class="step-arrow">→</div>
-      <div class="step">
-        <div class="step-num">02</div>
-        <div class="step-body">
-          <h3>AI analyses it</h3>
-          <p>Gemini AI runs a comprehensive credibility analysis using forensic signals.</p>
-        </div>
-      </div>
-      <div class="step-arrow">→</div>
-      <div class="step">
-        <div class="step-num">03</div>
-        <div class="step-body">
-          <h3>Get the report</h3>
-          <p>Receive a detailed credibility report with score, red flags, and next steps.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA section -->
-  <section class="land-cta">
-    <div class="cta-box">
-      <div class="cta-tag">Ready?</div>
-      <h2>Stop believing. Start knowing.</h2>
-      <p>Join the era of AI-assisted truth-finding. Free. Private. Fast.</p>
-      <button class="btn-primary btn-large" onclick="enterApp()">
-        Launch TruthLens
-        <span class="btn-arrow">→</span>
-      </button>
+  <section id="how-it-works" class="hiw-section">
+    <div class="section-label">How it works</div>
+    <div class="hiw-steps">
+      <div class="hiw-step"><div class="hiw-num">01</div><h3>Submit Content</h3><p>Paste text, upload an image, enter an article URL, or type a claim to fact-check.</p></div>
+      <div class="hiw-arrow">→</div>
+      <div class="hiw-step"><div class="hiw-num">02</div><h3>AI Analysis</h3><p>Groq's LLaMA model analyzes the content against known facts, patterns, and credibility signals.</p></div>
+      <div class="hiw-arrow">→</div>
+      <div class="hiw-step"><div class="hiw-num">03</div><h3>Get Results</h3><p>Receive a credibility score, detailed analysis, red flags, and specific steps to verify further.</p></div>
     </div>
   </section>
 
   <footer class="land-footer">
-    <span class="logo-text" style="opacity:.4">TruthLens</span>
-    <span style="opacity:.3">Built for the fact-checking era · Powered by Gemini AI</span>
+    <div class="land-logo"><span class="logo-icon">⬡</span> TruthLens</div>
+    <p>AI-powered credibility intelligence · Free forever · No ads</p>
   </footer>
-
 </div>
 
-<!-- ═══════════════════════ MAIN APP ═══════════════════════ -->
+<!-- ═══════════════ APP PAGE ═══════════════ -->
 <div id="app-page" class="page">
-
-  <div class="noise"></div>
 
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
@@ -175,261 +159,177 @@
       <span class="logo-text">TruthLens</span>
     </div>
 
-    <nav class="sb-nav">
-      <div class="sb-section-label">Analyze</div>
-      <button class="sb-btn active" data-tab="text" onclick="switchTab('text', this)">
-        <span class="sb-icon">📝</span>
-        <span>Text</span>
-      </button>
-      <button class="sb-btn" data-tab="image" onclick="switchTab('image', this)">
-        <span class="sb-icon">🖼️</span>
-        <span>Image</span>
-      </button>
-      <button class="sb-btn" data-tab="article" onclick="switchTab('article', this)">
-        <span class="sb-icon">📰</span>
-        <span>Article</span>
-      </button>
-      <button class="sb-btn" data-tab="compare" onclick="switchTab('compare', this)">
-        <span class="sb-icon">⚖️</span>
-        <span>Compare</span>
-      </button>
-      <button class="sb-btn" data-tab="factcheck" onclick="switchTab('factcheck', this)">
-        <span class="sb-icon">⚡</span>
-        <span>Fact Check</span>
-      </button>
-
-      <div class="sb-section-label" style="margin-top:1.5rem">Review</div>
-      <button class="sb-btn" data-tab="history" onclick="switchTab('history', this)">
-        <span class="sb-icon">🕒</span>
-        <span>History</span>
-      </button>
-      <button class="sb-btn" data-tab="stats" onclick="switchTab('stats', this)">
-        <span class="sb-icon">📊</span>
-        <span>Dashboard</span>
-      </button>
-    </nav>
-
-    <div class="sb-bottom">
-      <div class="sb-status" id="connection-status">
-        <span class="status-dot" id="status-dot"></span>
-        <span id="status-text">Connecting...</span>
+    <div class="sb-user" id="sb-user-info" style="display:none">
+      <div class="sb-avatar" id="sb-avatar">U</div>
+      <div class="sb-user-details">
+        <div class="sb-user-name" id="sb-user-name">User</div>
+        <div class="sb-user-email" id="sb-user-email">guest</div>
       </div>
     </div>
-  </aside>
 
-  <!-- Mobile header -->
-  <div class="mobile-header">
-    <button class="hamburger" onclick="toggleSidebar()" id="hamburger">☰</button>
-    <span class="logo-text">TruthLens</span>
-    <button class="btn-xs" onclick="exitApp()">← Home</button>
-  </div>
+    <nav class="sb-nav">
+      <div class="sb-section-label">Analyze</div>
+      <button class="sb-btn active" data-tab="text"     onclick="switchTab('text',this)">📝 Text Analysis</button>
+      <button class="sb-btn"        data-tab="image"    onclick="switchTab('image',this)">🖼️ Image Check</button>
+      <button class="sb-btn"        data-tab="article"  onclick="switchTab('article',this)">📰 Article Analysis</button>
+      <button class="sb-btn"        data-tab="compare"  onclick="switchTab('compare',this)">🔀 Source Compare</button>
+      <button class="sb-btn"        data-tab="factcheck" onclick="switchTab('factcheck',this)">⚡ Fact Check</button>
+
+      <div class="sb-section-label">Account</div>
+      <button class="sb-btn"        data-tab="history"  onclick="switchTab('history',this)">🕐 History</button>
+      <button class="sb-btn"        data-tab="stats"    onclick="switchTab('stats',this)">📊 Stats</button>
+      <button class="sb-btn sb-logout" id="sb-logout-btn" onclick="handleLogout()" style="display:none">🚪 Sign Out</button>
+    </nav>
+  </aside>
 
   <!-- Main content -->
   <main class="app-main">
-    <div class="content-area">
+    <div class="app-topbar">
+      <button class="hamburger" onclick="toggleSidebar()" id="hamburger">☰</button>
+      <div class="topbar-title" id="topbar-title">Text Analysis</div>
+      <div class="topbar-right">
+        <div class="topbar-user" id="topbar-user"></div>
+        <button class="btn-xs" onclick="exitApp()">← Home</button>
+      </div>
+    </div>
 
-      <!-- ── Text Tab ── -->
+    <div class="app-content">
+
+      <!-- TEXT TAB -->
       <div class="tab-panel active" id="tab-text">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Text Analysis</h2>
-            <p class="panel-sub">Paste any news text, social post, or claim for instant credibility analysis</p>
-          </div>
+        <div class="panel-header"><h2>Text Analysis</h2><p>Paste any news, claim, or social media post to analyze its credibility</p></div>
+        <div class="input-group">
+          <div class="input-label-row"><label>Text to analyze</label><span class="char-count" id="text-char-count">0 characters</span></div>
+          <textarea id="text-input" placeholder="Paste the text, headline, or claim you want to analyze..." rows="7"></textarea>
         </div>
-        <div class="input-card">
-          <textarea id="text-input" placeholder="Paste news text, headline, social media post, or any claim here..." rows="7"></textarea>
-          <div class="input-footer">
-            <span class="char-count" id="text-char-count">0 characters</span>
-            <button class="btn-primary" onclick="analyzeText()" id="text-btn">
-              <span class="btn-inner">Analyze Now →</span>
-            </button>
-          </div>
-        </div>
-        <div class="tip-box">
-          <span class="tip-icon">💡</span>
-          <span>Tip: For best results, paste at least 2–3 sentences. Single headlines may produce less detailed analysis.</span>
+        <div class="action-row">
+          <button class="btn-primary" onclick="analyzeText()" id="text-btn">Analyze Text →</button>
+          <span class="hint">Ctrl+Enter to analyze</span>
         </div>
       </div>
 
-      <!-- ── Image Tab ── -->
+      <!-- IMAGE TAB -->
       <div class="tab-panel" id="tab-image">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Image Forensics</h2>
-            <p class="panel-sub">Detect AI-generated, manipulated, or misleading images</p>
-          </div>
-        </div>
+        <div class="panel-header"><h2>Image Verification</h2><p>Upload an image to check for manipulation or AI generation</p></div>
         <div class="upload-zone" id="upload-zone" onclick="document.getElementById('image-input').click()">
-          <input type="file" id="image-input" accept="image/*" hidden />
-          <div id="upload-placeholder">
-            <div class="upload-icon">📸</div>
-            <p class="upload-title">Drop image here or click to upload</p>
-            <p class="upload-sub">Supports JPG, PNG, WebP · Max 5MB</p>
-          </div>
-          <div id="image-preview-wrap" style="display:none">
-            <img id="image-preview-img" alt="Preview" />
-            <p class="img-name" id="img-name"></p>
-          </div>
+          <div class="upload-icon">🖼️</div>
+          <div class="upload-text">Click to upload or drag & drop</div>
+          <div class="upload-sub">JPG, PNG, WebP · Max 5MB</div>
+          <input type="file" id="image-input" accept="image/*" style="display:none"/>
         </div>
-        <button class="btn-primary" onclick="analyzeImage()" id="image-btn" style="width:100%">
-          <span class="btn-inner">Analyze Image →</span>
-        </button>
+        <div id="image-preview-wrap" style="display:none">
+          <img id="image-preview" alt="Preview"/>
+          <button class="btn-xs clear-btn" onclick="clearImage()">✕ Clear</button>
+        </div>
+        <div class="action-row">
+          <button class="btn-primary" onclick="analyzeImage()" id="image-btn" style="width:100%">Analyze Image →</button>
+        </div>
       </div>
 
-      <!-- ── Article Tab ── -->
+      <!-- ARTICLE TAB -->
       <div class="tab-panel" id="tab-article">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Article Analysis</h2>
-            <p class="panel-sub">Full credibility audit of news articles with source assessment</p>
-          </div>
+        <div class="panel-header"><h2>Article Analysis</h2><p>Analyze a full article for source credibility, bias, and factual accuracy</p></div>
+        <div class="input-group">
+          <label>Article URL</label>
+          <input type="url" id="article-url" placeholder="https://example.com/article"/>
         </div>
-        <div class="input-card">
-          <input type="url" id="article-url" placeholder="Article URL (e.g. https://example.com/article)" />
-          <textarea id="article-content" placeholder="Paste the article content here..." rows="6"></textarea>
-          <div class="input-footer">
-            <span></span>
-            <button class="btn-primary" onclick="analyzeArticle()" id="article-btn">
-              <span class="btn-inner">Analyze Article →</span>
-            </button>
-          </div>
+        <div class="input-group">
+          <label>Article Content <span style="color:var(--text3);font-size:0.75rem">(paste the full text)</span></label>
+          <textarea id="article-content" placeholder="Paste the full article text here..." rows="8"></textarea>
+        </div>
+        <div class="action-row">
+          <button class="btn-primary" onclick="analyzeArticle()" id="article-btn">Analyze Article →</button>
         </div>
       </div>
 
-      <!-- ── Compare Tab ── -->
+      <!-- COMPARE TAB -->
       <div class="tab-panel" id="tab-compare">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Source Comparison</h2>
-            <p class="panel-sub">Compare multiple claims to find contradictions and the most reliable version</p>
-          </div>
+        <div class="panel-header"><h2>Source Comparison</h2><p>Compare how different sources cover the same topic</p></div>
+        <div id="sources-list">
+          <div class="source-item"><label>Source 1</label><textarea class="source-input" placeholder="Paste the first source text..." rows="4"></textarea></div>
+          <div class="source-item"><label>Source 2</label><textarea class="source-input" placeholder="Paste the second source text..." rows="4"></textarea></div>
         </div>
-        <div class="input-card">
-          <div id="sources-container">
-            <div class="source-row">
-              <span class="source-label">Source 1</span>
-              <textarea class="source-input" placeholder="Paste first claim or article excerpt..." rows="3"></textarea>
-            </div>
-            <div class="source-row">
-              <span class="source-label">Source 2</span>
-              <textarea class="source-input" placeholder="Paste second claim or article excerpt..." rows="3"></textarea>
-            </div>
-          </div>
-          <div class="compare-actions">
-            <button class="btn-secondary" onclick="addSource()">+ Add Source</button>
-            <button class="btn-primary" onclick="compareSources()" id="compare-btn">
-              <span class="btn-inner">Compare Sources →</span>
-            </button>
-          </div>
+        <div class="action-row">
+          <button class="btn-secondary" onclick="addSource()">+ Add Source</button>
+          <button class="btn-primary" onclick="compareSources()" id="compare-btn">Compare Sources →</button>
         </div>
       </div>
 
-      <!-- ── Fact Check Tab ── -->
+      <!-- FACTCHECK TAB -->
       <div class="tab-panel" id="tab-factcheck">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Quick Fact Check</h2>
-            <p class="panel-sub">Type any claim — get an instant TRUE/FALSE verdict with sources</p>
-          </div>
+        <div class="panel-header"><h2>Quick Fact Check</h2><p>Get an instant AI verdict on any claim</p></div>
+        <div class="input-group">
+          <label>Claim to fact-check</label>
+          <input type="text" id="factcheck-input" placeholder="e.g. Modi is dead, vaccines cause autism, earth is flat..."/>
         </div>
-        <div class="input-card factcheck-input-wrap">
-          <div class="factcheck-row">
-            <input type="text" id="factcheck-input" placeholder="e.g. 'The moon landing was faked' or 'Coffee causes cancer'" />
-            <button class="btn-primary" onclick="quickFactCheck()" id="factcheck-btn">
-              <span class="btn-inner">Check →</span>
-            </button>
-          </div>
-          <div class="quick-examples">
-            <span class="ex-label">Try:</span>
-            <button class="ex-pill" onclick="setFactCheck('5G towers cause COVID-19')">5G causes COVID</button>
-            <button class="ex-pill" onclick="setFactCheck('Humans only use 10% of their brain')">10% brain myth</button>
-            <button class="ex-pill" onclick="setFactCheck('Vaccines cause autism')">Vaccines & autism</button>
-          </div>
+        <div class="example-pills">
+          <span class="pill-label">Try:</span>
+          <button class="ex-pill" onclick="setFactCheck('5G towers cause COVID-19')">5G causes COVID</button>
+          <button class="ex-pill" onclick="setFactCheck('Humans only use 10% of their brain')">10% brain myth</button>
+          <button class="ex-pill" onclick="setFactCheck('Vaccines cause autism')">Vaccines & autism</button>
+          <button class="ex-pill" onclick="setFactCheck('The moon landing was faked')">Moon landing hoax</button>
+        </div>
+        <div class="action-row">
+          <button class="btn-primary" onclick="quickFactCheck()" id="factcheck-btn">Fact Check →</button>
         </div>
       </div>
 
-      <!-- ── History Tab ── -->
+      <!-- HISTORY TAB -->
       <div class="tab-panel" id="tab-history">
         <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Analysis History</h2>
-            <p class="panel-sub">All your past credibility checks stored locally</p>
-          </div>
-          <div class="header-actions">
-            <select id="history-filter" onchange="loadHistory()" class="filter-select">
-              <option value="">All Types</option>
-              <option value="text">Text</option>
-              <option value="image">Image</option>
-              <option value="article">Article</option>
-              <option value="compare">Compare</option>
-            </select>
-          </div>
+          <h2>Analysis History</h2>
+          <p id="history-subtitle">Your recent analyses</p>
         </div>
-        <div id="history-list" class="history-list">
-          <div class="loading-state">Loading history...</div>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="filterHistory(null,this)">All</button>
+          <button class="filter-btn" onclick="filterHistory('text',this)">Text</button>
+          <button class="filter-btn" onclick="filterHistory('article',this)">Article</button>
+          <button class="filter-btn" onclick="filterHistory('compare',this)">Compare</button>
+          <button class="filter-btn" onclick="filterHistory('factcheck',this)">Fact Check</button>
         </div>
+        <div id="history-list" class="history-list"></div>
       </div>
 
-      <!-- ── Stats Tab ── -->
+      <!-- STATS TAB -->
       <div class="tab-panel" id="tab-stats">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Dashboard</h2>
-            <p class="panel-sub">Your credibility analysis statistics and insights</p>
-          </div>
-        </div>
-        <div id="stats-content">
-          <div class="loading-state">Loading stats...</div>
-        </div>
+        <div class="panel-header"><h2>Your Stats</h2><p>Overview of your analysis activity</p></div>
+        <div class="stats-grid" id="stats-grid"></div>
       </div>
 
-      <!-- ══ RESULTS PANEL ══ -->
-      <div id="results-panel" class="results-panel" style="display:none">
+    </div><!-- /app-content -->
 
-        <div class="results-header">
-          <div class="results-header-left">
-            <h2>Analysis Report</h2>
-            <span id="result-timestamp" class="result-ts"></span>
+    <!-- Results Panel -->
+    <div class="results-panel" id="results-panel" style="display:none">
+      <div class="results-header">
+        <div class="results-score-wrap">
+          <svg class="score-ring" viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="52"/>
+            <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="score-center">
+            <div class="score-num" id="score-num">—</div>
+            <div class="score-label">credibility</div>
           </div>
-          <div class="results-header-right">
+        </div>
+        <div class="results-meta">
+          <div class="verdict-badge unclear" id="verdict-badge">—</div>
+          <div class="verdict-text" id="verdict-text"></div>
+          <div class="category-tag" id="category-tag"></div>
+          <div class="result-timestamp" id="result-timestamp"></div>
+          <div class="result-actions">
             <button class="btn-icon" onclick="exportReport()" title="Export report">⬇</button>
             <button class="btn-icon" onclick="closeResults()" title="Close">✕</button>
           </div>
         </div>
-
-        <!-- Score Hero -->
-        <div class="score-hero">
-          <div class="score-ring-wrap">
-            <svg class="score-ring" viewBox="0 0 120 120">
-              <circle class="ring-bg" cx="60" cy="60" r="52" />
-              <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="52"
-                stroke-dasharray="326.7"
-                stroke-dashoffset="326.7" />
-            </svg>
-            <div class="score-inner">
-              <span class="score-num" id="score-num">0</span>
-              <span class="score-label">/ 100</span>
-            </div>
-          </div>
-          <div class="score-meta">
-            <div class="verdict-badge" id="verdict-badge">Analyzing...</div>
-            <p class="verdict-text" id="verdict-text"></p>
-            <div class="category-tag" id="category-tag"></div>
-          </div>
-        </div>
-
-        <!-- Report Cards -->
-        <div id="report-cards" class="report-cards"></div>
-
       </div>
-
+      <div id="report-cards" class="report-cards"></div>
     </div>
-  </main>
 
+  </main>
 </div>
 
 <!-- Toast container -->
-<div id="toasts" class="toasts"></div>
+<div id="toast-container"></div>
 
 <script src="script.js"></script>
 </body>
