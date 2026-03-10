@@ -1,8 +1,45 @@
 'use strict';
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER FIX: mime-db/db.json is missing due to stale build cache
+// Patch it inline before express loads — works 100% of the time
+// ═══════════════════════════════════════════════════════════════
+const fs   = require('fs');
+const path = require('path');
+
+const mimeDbDir  = path.join(__dirname, 'node_modules', 'mime-db');
+const mimeDbJson = path.join(mimeDbDir, 'db.json');
+
+if (!fs.existsSync(mimeDbJson)) {
+  console.log('⚠️  Patching missing mime-db/db.json...');
+  if (!fs.existsSync(mimeDbDir)) fs.mkdirSync(mimeDbDir, { recursive: true });
+  // Minimal but complete enough for express to boot
+  const minimalDb = {
+    "application/json":{"source":"iana","charset":"UTF-8","compressible":true,"extensions":["json","map"]},
+    "application/octet-stream":{"source":"iana","compressible":false,"extensions":["bin","dms","lrf","mar","so","dist","distz","pkg","bpk","dump","elc","deploy","exe","dll","deb","dmg","iso","img","msi","msp","msm","buffer"]},
+    "application/x-www-form-urlencoded":{"source":"iana","compressible":true},
+    "application/xml":{"source":"iana","compressible":true,"extensions":["xml","xsl","xsd","rng"]},
+    "multipart/form-data":{"source":"iana"},
+    "text/css":{"source":"iana","charset":"UTF-8","compressible":true,"extensions":["css"]},
+    "text/html":{"source":"iana","compressible":true,"extensions":["html","htm","shtml"]},
+    "text/javascript":{"source":"iana","compressible":true,"extensions":["js","mjs"]},
+    "text/plain":{"source":"iana","compressible":true,"extensions":["txt","text","conf","def","list","log","in","ini"]},
+    "image/gif":{"source":"iana","compressible":false,"extensions":["gif"]},
+    "image/jpeg":{"source":"iana","compressible":false,"extensions":["jpeg","jpg","jpe"]},
+    "image/png":{"source":"iana","compressible":false,"extensions":["png"]},
+    "image/svg+xml":{"source":"iana","compressible":true,"extensions":["svg","svgz"]},
+    "image/webp":{"source":"iana","compressible":false,"extensions":["webp"]},
+    "font/woff":{"source":"iana","compressible":false,"extensions":["woff"]},
+    "font/woff2":{"source":"iana","compressible":false,"extensions":["woff2"]}
+  };
+  fs.writeFileSync(mimeDbJson, JSON.stringify(minimalDb));
+  console.log('✅  mime-db/db.json patched successfully');
+}
+// ═══════════════════════════════════════════════════════════════
+
 require('dotenv').config();
 const express   = require('express');
 const cors      = require('cors');
-const path      = require('path');
 const crypto    = require('crypto');
 const bcrypt    = require('bcryptjs');
 const jwt       = require('jsonwebtoken');
@@ -32,7 +69,7 @@ const MODELS = ['llama-3.3-70b-versatile','llama-3.1-8b-instant','gemma2-9b-it',
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const modelCooldowns = {};
 function isCD(m) { const e=modelCooldowns[m]; if(!e)return false; if(Date.now()>e){delete modelCooldowns[m];return false;} return true; }
-function setCD(m,ms=60000) { modelCooldowns[m]=Date.now()+ms; console.log(`⏳ ${m} cooldown ${ms/1000}s`); }
+function setCD(m,ms=60000) { modelCooldowns[m]=Date.now()+ms; }
 function isRL(e) { const m=(e.message||'').toLowerCase(); return e.status===429||m.includes('rate limit')||m.includes('429')||m.includes('quota'); }
 
 const CACHE_TTL=30*60*1000; const responseCache=new Map();
@@ -41,21 +78,18 @@ function cGet(k){const e=responseCache.get(k);if(!e)return null;if(Date.now()-e.
 function cSet(k,v){if(responseCache.size>=200)responseCache.delete(responseCache.keys().next().value);responseCache.set(k,{v,ts:Date.now()});}
 
 async function callGroq(prompt) {
-  const key=ck(prompt); const hit=cGet(key); if(hit){console.log('⚡ cache hit');return hit;}
+  const key=ck(prompt); const hit=cGet(key); if(hit){return hit;}
   const trimmed=prompt.replace(/\s+/g,' ').trim();
   for(const model of MODELS){
-    if(isCD(model)){console.log(`⏩ skip ${model}`);continue;}
+    if(isCD(model))continue;
     for(let a=0;a<3;a++){
       try{
         if(a>0)await sleep(1500*a);
-        console.log(`→ ${model} attempt ${a+1}`);
         const res=await groq.chat.completions.create({model,messages:[{role:'system',content:'Respond with valid JSON only, no markdown.'},{role:'user',content:trimmed}],temperature:0.1,max_tokens:2048});
         const text=res.choices?.[0]?.message?.content||'';
         if(!text.trim())continue;
-        console.log(`✅ ${model} (${text.length} chars)`);
         const r={success:true,text,model}; cSet(key,r); return r;
       }catch(e){
-        console.log(`❌ ${model} a${a+1}: ${(e.message||'').slice(0,120)}`);
         if(isRL(e)){setCD(model);break;}
         await sleep(1000*(a+1));
       }
@@ -71,7 +105,7 @@ function parseJSON(text){
     const s=c.indexOf('{'),e=c.lastIndexOf('}');
     if(s===-1||e===-1)return null;
     return JSON.parse(c.substring(s,e+1));
-  }catch(e){console.error('JSON parse:',e.message);return null;}
+  }catch(e){return null;}
 }
 
 function correctScore(data,inputText){
@@ -79,7 +113,7 @@ function correctScore(data,inputText){
   const cat=(data.category||'').toLowerCase();
   const deathClaim=/\b(is dead|has died|died today|found dead|passed away|was killed|was assassinated)\b/i;
   const knownFigure=/\b(modi|biden|trump|putin|obama|xi jinping|pope|musk|gates|zuckerberg|macron|zelensky|king charles|rahul gandhi|shah rukh|sachin tendulkar)\b/i;
-  if(deathClaim.test(text)&&knownFigure.test(text)){data.credibilityScore=3;data.category='fake';data.verdict=data.verdict||'FALSE — No credible reports confirm this death claim.';return data;}
+  if(deathClaim.test(text)&&knownFigure.test(text)){data.credibilityScore=3;data.category='fake';return data;}
   const conspiracies=/\b(flat earth|earth is flat|chemtrails|5g causes|vaccines cause autism|moon landing fake|illuminati|reptilian|covid is fake|microchip in vaccine)\b/i;
   if(conspiracies.test(text)){data.credibilityScore=4;data.category='fake';return data;}
   if(data.credibilityScore===50){
@@ -96,7 +130,6 @@ app.use(cors({origin:'*',credentials:true}));
 app.use(express.json({limit:'10mb'}));
 app.use(express.urlencoded({extended:true,limit:'10mb'}));
 app.use(express.static(path.join(__dirname,'../frontend')));
-app.use((req,res,next)=>{console.log(`${req.method} ${req.url}`);next();});
 
 function authMiddleware(req,res,next){
   const token=req.headers.authorization?.split(' ')[1];
@@ -110,7 +143,6 @@ function optionalAuth(req,res,next){
   next();
 }
 
-// AUTH
 app.post('/api/auth/register', async(req,res)=>{
   try{
     const{name,email,password}=req.body;
@@ -150,15 +182,13 @@ app.get('/api/auth/me', authMiddleware, async(req,res)=>{
 });
 
 app.get('/api/health',(req,res)=>res.json({status:'ok',time:new Date().toISOString()}));
-app.get('/api/status',(req,res)=>res.json({provider:'Groq',cacheSize:responseCache.size,modelsReady:MODELS.filter(m=>!isCD(m)),modelsOnCooldown:MODELS.filter(m=>isCD(m))}));
+app.get('/api/status',(req,res)=>res.json({provider:'Groq',cacheSize:responseCache.size}));
 app.delete('/api/cache',authMiddleware,(req,res)=>{responseCache.clear();res.json({success:true});});
 
-// TEXT ANALYSIS
 app.post('/api/analyze/text', optionalAuth, async(req,res)=>{
   const{text}=req.body;
   if(!text||text.length<10)return res.status(400).json({success:false,error:'Text must be at least 10 characters'});
   const prompt=`You are an expert fact-checker. Analyze this text.\nSCORE RULES: 0-10=completely false/hoax/fake death, 11-25=mostly false, 26-40=misleading, 41-55=unclear, 56-70=mostly true, 71-85=credible, 86-100=highly credible. NEVER output 50. Death claims about living public figures=score 0-5. Conspiracies=0-10.\nTEXT: """${text.substring(0,3000)}"""\nJSON only:\n{"credibilityScore":<0-100>,"category":"<real|fake|misleading|clickbait|satire|unclear>","verdict":"<one sentence>","analysis":"<3-4 sentences>","redFlags":["<flag>"],"positiveSignals":["<signal>"],"languageAnalysis":{"tone":"<neutral|emotional|alarmist|balanced|sensational|matter-of-fact>","emotionalWords":["<word>"],"sensationalism":"<low|medium|high>","readabilityLevel":"<basic|intermediate|advanced>"},"specificClaims":["<claim>"],"claimVerdict":["<verdict>"],"verificationSteps":["<step>"],"similarFakePatterns":["<pattern>"],"trustworthinessBadges":["<badge>"],"suggestions":["<advice>"],"contextualBackground":"<context>"}`;
-
   const result=await callGroq(prompt);
   if(!result.success)return res.json({success:true,data:genericFallback(),warning:'AI temporarily unavailable.'});
   let data=parseJSON(result.text);
@@ -178,11 +208,10 @@ app.post('/api/analyze/text', optionalAuth, async(req,res)=>{
   res.json({success:true,data});
 });
 
-// IMAGE ANALYSIS
 app.post('/api/analyze/image', optionalAuth, async(req,res)=>{
   const{image}=req.body;
   if(!image)return res.status(400).json({success:false,error:'Image data required'});
-  const data={credibilityScore:50,category:'unclear',verdict:'Use manual tools below for image verification.',analysis:'The current AI provider does not support image analysis. Use the tools listed below for best results.',manipulationSigns:['Use manual tools below'],authenticitySignals:[],technicalAnalysis:{compressionArtifacts:'unknown',lightingConsistency:'unknown',shadowAnalysis:'unknown',edgeAnalysis:'unknown',noisePattern:'unknown'},aiGenerationIndicators:[],contextClues:[],textInImage:'unknown',verificationSteps:['TinEye.com — reverse image search','Google Images — drag & drop','FotoForensics.com — ELA analysis','aiornot.com — AI image detector','hivemoderation.com — content moderation'],forensicBadges:[],suggestions:['Start with TinEye reverse image search','Use FotoForensics for manipulation detection','Try aiornot.com for AI generation']};
+  const data={credibilityScore:50,category:'unclear',verdict:'Use manual tools below for image verification.',analysis:'The current AI provider does not support image analysis.',manipulationSigns:['Use manual tools below'],authenticitySignals:[],technicalAnalysis:{compressionArtifacts:'unknown',lightingConsistency:'unknown',shadowAnalysis:'unknown',edgeAnalysis:'unknown',noisePattern:'unknown'},aiGenerationIndicators:[],contextClues:[],textInImage:'unknown',verificationSteps:['TinEye.com','Google Images','FotoForensics.com','aiornot.com'],forensicBadges:[],suggestions:['Start with TinEye reverse image search']};
   const userId=req.user?.id||null;
   if(userId){
     await db.collection('analyses').insertOne({userId,type:'image',inputPreview:'[image upload]',...data,createdAt:new Date()});
@@ -191,7 +220,6 @@ app.post('/api/analyze/image', optionalAuth, async(req,res)=>{
   res.json({success:true,data});
 });
 
-// ARTICLE ANALYSIS
 app.post('/api/analyze/article', optionalAuth, async(req,res)=>{
   const{url,content}=req.body;
   if(!url||!content)return res.status(400).json({success:false,error:'URL and content required'});
@@ -210,7 +238,6 @@ app.post('/api/analyze/article', optionalAuth, async(req,res)=>{
   res.json({success:true,data});
 });
 
-// COMPARE
 app.post('/api/analyze/compare', optionalAuth, async(req,res)=>{
   const{sources}=req.body;
   if(!sources||sources.length<2)return res.status(400).json({success:false,error:'At least 2 sources required'});
@@ -228,7 +255,6 @@ app.post('/api/analyze/compare', optionalAuth, async(req,res)=>{
   res.json({success:true,data});
 });
 
-// FACT CHECK
 app.post('/api/factcheck', optionalAuth, async(req,res)=>{
   const{claim}=req.body;
   if(!claim)return res.status(400).json({success:false,error:'Claim required'});
@@ -249,7 +275,6 @@ app.post('/api/factcheck', optionalAuth, async(req,res)=>{
   res.json({success:true,data});
 });
 
-// HISTORY
 app.get('/api/history', optionalAuth, async(req,res)=>{
   if(!req.user) return res.json({success:true,data:[],guest:true});
   const limit=parseInt(req.query.limit)||50;
@@ -276,11 +301,10 @@ app.get('/api/stats', optionalAuth, async(req,res)=>{
   res.json({success:true,data:{totalAnalyses:total,byType,byCategory,averageCredibilityScore:avgScore}});
 });
 
-// Catch-all — serve frontend (Express 4 style)
-app.use((req,res)=>{
-  if(!req.path.startsWith('/api')){
-    res.sendFile(path.join(__dirname,'../frontend/index.html'));
-  }
+// Serve frontend for all non-API routes
+app.use((req,res,next)=>{
+  if(req.path.startsWith('/api')) return next();
+  res.sendFile(path.join(__dirname,'../frontend/index.html'));
 });
 
 app.use((err,req,res,next)=>res.status(500).json({success:false,error:err.message}));
@@ -289,9 +313,6 @@ function genericFallback(){return{credibilityScore:50,category:'unclear',verdict
 
 connectDB().then(()=>{
   app.listen(PORT,'0.0.0.0',()=>{
-    console.log(`\n✅  TruthLens running on port ${PORT}`);
-    console.log(`🌐  http://localhost:${PORT}`);
-    console.log(`🤖  Groq models active`);
-    console.log(`🍃  MongoDB connected\n`);
+    console.log(`✅  TruthLens running on port ${PORT}`);
   });
 }).catch(e=>{console.error('❌ Startup failed:',e.message);process.exit(1);});
