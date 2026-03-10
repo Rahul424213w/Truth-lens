@@ -392,6 +392,20 @@ body {
   display:flex; align-items:center; gap:0.5rem;
   font-size:0.72rem; color:var(--text3);
 }
+.sb-author {
+  margin-top:0.85rem;
+  font-size:0.68rem;
+  color:var(--text3);
+  line-height:1.6;
+}
+.sb-author span { display:block; margin-bottom:0.3rem; }
+.sb-author a {
+  color:var(--teal);
+  text-decoration:none;
+  font-weight:600;
+  transition:opacity 0.2s;
+}
+.sb-author a:hover { opacity:0.75; }
 .sb-footer-dot {
   width:6px; height:6px; border-radius:50%;
   background:var(--teal);
@@ -1321,6 +1335,12 @@ textarea { min-height:100px; }
       <span class="lp-badge">🆓 Free forever</span>
       <span class="lp-badge">🛡️ No bias</span>
     </div>
+    <div style="margin-top:0.85rem;font-size:0.72rem;color:var(--text3);text-align:center;line-height:1.8;">
+      Built by <strong style="color:var(--text2)"></strong> &nbsp;·&nbsp;
+      <a href="https://rahul424213w.github.io/My-Portfolio/" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none;font-weight:600;">Portfolio</a>
+      &nbsp;·&nbsp;
+      <a href="https://www.linkedin.com/in/rahul-a-k-42a422321/" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:none;font-weight:600;">LinkedIn</a>
+    </div>
 
   </div>
 </div>
@@ -1385,6 +1405,11 @@ textarea { min-height:100px; }
       <div class="sb-footer-badge">
         <span class="sb-footer-dot"></span>
         <span>Powered by Groq AI</span>
+      </div>
+      <div class="sb-author">
+        <span>Built by </span>
+        <a href="https://rahul424213w.github.io/My-Portfolio/" target="_blank" rel="noopener">🌐 Portfolio</a>
+        <a href="https://www.linkedin.com/in/rahul-a-k-42a422321/" target="_blank" rel="noopener">💼 LinkedIn</a>
       </div>
     </div>
   </aside>
