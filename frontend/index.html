@@ -1423,12 +1423,8 @@ textarea { min-height: 110px; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.85rem 1rem;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s;
+  padding: 0.85rem 1rem 0 1rem;
 }
-.rcard-head:hover { background: rgba(255,255,255,0.02); }
 
 .rcard-title {
   font-size: 0.75rem;
@@ -1442,15 +1438,7 @@ textarea { min-height: 110px; }
   font-family: 'DM Mono', monospace;
 }
 
-.rcard-chevron {
-  font-size: 0.6rem;
-  color: var(--text3);
-  transition: transform 0.2s;
-}
-.rcard-head.open .rcard-chevron { transform: rotate(180deg); }
-
-.rcard-body { padding: 0 1rem 1rem; }
-.rcard-body.closed { display: none; }
+.rcard-body { padding: 0.6rem 1rem 1rem; }
 
 /* Tag lists */
 .tag-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
@@ -2781,7 +2769,7 @@ function renderResults(data, type) {
   let html = '';
 
   // Analysis
-  if (data.analysis) html += rcard('🔍 Analysis', `<p class="prose">${escHtml(data.analysis)}</p>`, true);
+  if (data.analysis) html += rcard('🔍 Analysis', `<p class="prose">${escHtml(data.analysis)}</p>`);
 
   // Signals
   const flags = data.redFlags || data.manipulationSigns || [];
@@ -2790,7 +2778,7 @@ function renderResults(data, type) {
     let inner = '';
     if (flags.length) inner += `<div style="margin-bottom:0.6rem"><div style="font-size:0.62rem;color:var(--red);font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace">🚩 Red Flags (${flags.length})</div><div class="tag-list">${flags.map(f=>`<span class="tag red">${escHtml(f)}</span>`).join('')}</div></div>`;
     if (pos.length)   inner += `<div><div style="font-size:0.62rem;color:var(--green);font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace">✓ Positive Signals (${pos.length})</div><div class="tag-list">${pos.map(p=>`<span class="tag green">${escHtml(p)}</span>`).join('')}</div></div>`;
-    html += rcard('🏷 Signals', inner, true);
+    html += rcard('🏷 Signals', inner);
   }
 
   // Claims breakdown
@@ -2865,7 +2853,7 @@ function renderResults(data, type) {
     let inner = '';
     if (data.agreements?.length) inner += `<div style="margin-bottom:0.6rem"><div style="font-size:0.62rem;color:var(--green);font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace">✓ Agreements</div><div class="tag-list">${data.agreements.map(a=>`<span class="tag green">${escHtml(a)}</span>`).join('')}</div></div>`;
     if (data.disagreements?.length) inner += `<div><div style="font-size:0.62rem;color:var(--red);font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.1em;font-family:'DM Mono',monospace">✗ Conflicts</div><div class="tag-list">${data.disagreements.map(a=>`<span class="tag red">${escHtml(a)}</span>`).join('')}</div></div>`;
-    html += rcard('🔀 Consistency Check', inner, true);
+    html += rcard('🔀 Consistency Check', inner);
   }
 
   // Verification steps
@@ -2933,7 +2921,7 @@ function renderFactCheckResult(data, claim) {
   document.getElementById('rp-timestamp').textContent = new Date().toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 
   let html = `<div class="rcard">
-    <div class="rcard-head open" style="cursor:default">
+    <div class="rcard-head">
       <div class="rcard-title">📌 Verdict</div>
     </div>
     <div class="rcard-body">
@@ -2942,7 +2930,7 @@ function renderFactCheckResult(data, claim) {
     </div>
   </div>`;
 
-  if (data.keyFacts?.length) html += rcard('📌 Key Facts', `<ol class="ol-list">${data.keyFacts.map(f=>`<li>${escHtml(f)}</li>`).join('')}</ol>`, true);
+  if (data.keyFacts?.length) html += rcard('📌 Key Facts', `<ol class="ol-list">${data.keyFacts.map(f=>`<li>${escHtml(f)}</li>`).join('')}</ol>`);
   if (data.context) html += rcard('📚 Context', `<p class="prose">${escHtml(data.context)}</p>`);
   if (data.expertConsensus) html += rcard('🎓 Expert Consensus', `<p class="prose">${escHtml(data.expertConsensus)}</p>`);
   if (data.specificSources?.length) html += rcard('🔗 Verify Here', `<ol class="ol-list">${data.specificSources.map(s=>`<li>${escHtml(s)}</li>`).join('')}</ol>`);
@@ -2954,19 +2942,13 @@ function renderFactCheckResult(data, claim) {
   setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
 }
 
-function rcard(title, content, open = false) {
+function rcard(title, content) {
   return `<div class="rcard">
-    <div class="rcard-head ${open?'open':''}" onclick="toggleCard(this)">
+    <div class="rcard-head">
       <div class="rcard-title">${title}</div>
-      <div class="rcard-chevron">▼</div>
     </div>
-    <div class="rcard-body ${open?'':'closed'}">${content}</div>
+    <div class="rcard-body">${content}</div>
   </div>`;
-}
-
-function toggleCard(h) {
-  h.classList.toggle('open');
-  h.nextElementSibling.classList.toggle('closed');
 }
 
 function closeResults() {
