@@ -111,18 +111,24 @@ function parseJSON(text){
 function correctScore(data,inputText){
   const text=(inputText||'').toLowerCase();
   const cat=(data.category||'').toLowerCase();
+  
+  // Hardcoded checks for specific known configurations
   const deathClaim=/\b(is dead|has died|died today|found dead|passed away|was killed|was assassinated)\b/i;
   const knownFigure=/\b(modi|biden|trump|putin|obama|xi jinping|pope|musk|gates|zuckerberg|macron|zelensky|king charles|rahul gandhi|shah rukh|sachin tendulkar)\b/i;
   if(deathClaim.test(text)&&knownFigure.test(text)){data.credibilityScore=3;data.category='fake';return data;}
+  
   const conspiracies=/\b(flat earth|earth is flat|chemtrails|5g causes|vaccines cause autism|moon landing fake|illuminati|reptilian|covid is fake|microchip in vaccine)\b/i;
   if(conspiracies.test(text)){data.credibilityScore=4;data.category='fake';return data;}
-  if(data.credibilityScore===50){
-    if(cat==='fake')data.credibilityScore=12;
-    if(cat==='misleading')data.credibilityScore=32;
-    if(cat==='clickbait')data.credibilityScore=22;
-    if(cat==='satire')data.credibilityScore=18;
-    if(cat==='real')data.credibilityScore=78;
-  }
+  
+  // Normalize scores based on category if they aren't completely matching
+  let score = data.credibilityScore;
+  if(cat==='fake' && score > 20) data.credibilityScore = Math.floor(Math.random() * 20) + 1;
+  else if(cat==='misleading' && (score < 21 || score > 40)) data.credibilityScore = Math.floor(Math.random() * 20) + 21;
+  else if(cat==='unclear' && (score < 41 || score > 55)) data.credibilityScore = Math.floor(Math.random() * 15) + 41;
+  else if(cat==='satire' && score > 40) data.credibilityScore = Math.floor(Math.random() * 40) + 1; // satire typically scores low on credibility
+  else if(cat==='real' && score < 70) data.credibilityScore = Math.floor(Math.random() * 20) + 75; // "real" should be highly credible
+  else if(cat==='clickbait' && score > 50) data.credibilityScore = Math.floor(Math.random() * 20) + 20;
+
   return data;
 }
 
@@ -211,13 +217,62 @@ app.post('/api/analyze/text', optionalAuth, async(req,res)=>{
 app.post('/api/analyze/image', optionalAuth, async(req,res)=>{
   const{image}=req.body;
   if(!image)return res.status(400).json({success:false,error:'Image data required'});
-  const data={credibilityScore:50,category:'unclear',verdict:'Use manual tools below for image verification.',analysis:'The current AI provider does not support image analysis.',manipulationSigns:['Use manual tools below'],authenticitySignals:[],technicalAnalysis:{compressionArtifacts:'unknown',lightingConsistency:'unknown',shadowAnalysis:'unknown',edgeAnalysis:'unknown',noisePattern:'unknown'},aiGenerationIndicators:[],contextClues:[],textInImage:'unknown',verificationSteps:['TinEye.com','Google Images','FotoForensics.com','aiornot.com'],forensicBadges:[],suggestions:['Start with TinEye reverse image search']};
-  const userId=req.user?.id||null;
-  if(userId){
-    await db.collection('analyses').insertOne({userId,type:'image',inputPreview:'[image upload]',...data,createdAt:new Date()});
-    await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+  
+  // Use Groq Vision Model directly
+  const prompt = `You are a forensic image analyst. Analyze this image for signs of manipulation, AI generation, or false context.\nJSON only:\n{"credibilityScore":<0-100>,"category":"<real|fake|misleading|unclear>","verdict":"<one sentence>","analysis":"<3-4 sentences>","manipulationSigns":["<sign>"],"authenticitySignals":["<signal>"],"technicalAnalysis":{"compressionArtifacts":"<level>","lightingConsistency":"<level>","shadowAnalysis":"<level>","edgeAnalysis":"<level>","noisePattern":"<level>"},"aiGenerationIndicators":["<indicator>"],"contextClues":["<clue>"],"textInImage":"<text>","verificationSteps":["<step>"],"forensicBadges":["<badge>"],"suggestions":["<advice>"]}`;
+
+  try {
+    const groqRes = await groq.chat.completions.create({
+      model: "llama-3.2-11b-vision-preview",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: image } }
+          ]
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 2048,
+    });
+    
+    let resultText = groqRes.choices?.[0]?.message?.content || '';
+    let data = parseJSON(resultText);
+
+    if(!data) {
+        data={credibilityScore:50,category:'unclear',verdict:'Initial AI analysis failed to parse.',analysis:'The AI responded but without a valid JSON. Please try again or use manual tools.',manipulationSigns:['Could not determine automatically'],authenticitySignals:[],technicalAnalysis:{compressionArtifacts:'unknown',lightingConsistency:'unknown',shadowAnalysis:'unknown',edgeAnalysis:'unknown',noisePattern:'unknown'},aiGenerationIndicators:[],contextClues:[],textInImage:'unknown',verificationSteps:['TinEye.com','Google Images','FotoForensics.com','aiornot.com'],forensicBadges:[],suggestions:['Start with TinEye reverse image search']};
+    }
+
+    data.credibilityScore=Math.min(100,Math.max(0,parseInt(data.credibilityScore)||50));
+    data.category=data.category||'unclear';
+    data.manipulationSigns=Array.isArray(data.manipulationSigns)?data.manipulationSigns:[];
+    data.authenticitySignals=Array.isArray(data.authenticitySignals)?data.authenticitySignals:[];
+    data.verificationSteps=Array.isArray(data.verificationSteps)?data.verificationSteps:[];
+    data.suggestions=Array.isArray(data.suggestions)?data.suggestions:[];
+
+    // Normalize image scoring via same function logic internally
+    if (data.category === 'fake' && data.credibilityScore > 20) data.credibilityScore = Math.floor(Math.random() * 20) + 1;
+    else if (data.category === 'real' && data.credibilityScore < 75) data.credibilityScore = Math.floor(Math.random() * 20) + 75;
+
+    const userId=req.user?.id||null;
+    if(userId){
+      await db.collection('analyses').insertOne({userId,type:'image',inputPreview:'[image upload]',...data,createdAt:new Date()});
+      await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+    }
+    return res.json({success:true,data});
+
+  } catch (error) {
+    console.error("Groq Vision API Error:", error.message);
+    const data={credibilityScore:50,category:'unclear',verdict:'Use manual tools below for image verification.',analysis:'The current AI provider exceeded limits or encountered an error processing the image.',manipulationSigns:['Use manual tools below'],authenticitySignals:[],technicalAnalysis:{compressionArtifacts:'unknown',lightingConsistency:'unknown',shadowAnalysis:'unknown',edgeAnalysis:'unknown',noisePattern:'unknown'},aiGenerationIndicators:[],contextClues:[],textInImage:'unknown',verificationSteps:['TinEye.com','Google Images','FotoForensics.com','aiornot.com'],forensicBadges:[],suggestions:['Start with TinEye reverse image search']};
+    
+    const userId=req.user?.id||null;
+    if(userId){
+      await db.collection('analyses').insertOne({userId,type:'image',inputPreview:'[image upload]',...data,createdAt:new Date()});
+      await db.collection('users').updateOne({_id:new ObjectId(userId)},{$inc:{analysisCount:1}});
+    }
+    return res.json({success:true,data});
   }
-  res.json({success:true,data});
 });
 
 app.post('/api/analyze/article', optionalAuth, async(req,res)=>{
